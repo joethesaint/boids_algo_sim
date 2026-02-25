@@ -1,31 +1,47 @@
 /**
- * Boids Flocking Simulation - Maximum Speed Edition
- * Zero-allocation rendering & Spatial Partitioning
+ * Boids Flocking Simulation - Maximum Speed & Ultra Smoothness
  */
 
+// --- Optimized Spatial Hash Grid ---
 class SpatialHashGrid {
     constructor(cellSize) {
         this.cellSize = cellSize;
         this.cells = new Map();
     }
-    _key(v) {
-        return `${Math.floor(v.x / this.cellSize)},${Math.floor(v.y / this.cellSize)},${Math.floor(v.z / this.cellSize)}`;
+    
+    _hash(v) {
+        const x = Math.floor(v.x / this.cellSize);
+        const y = Math.floor(v.y / this.cellSize);
+        const z = Math.floor(v.z / this.cellSize);
+        // Optimized numeric hash to avoid string garbage
+        return (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
     }
+
     clear() { this.cells.clear(); }
+
     add(obj) {
-        const key = this._key(obj.position);
-        if (!this.cells.has(key)) this.cells.set(key, []);
-        this.cells.get(key).push(obj);
+        const h = this._hash(obj.position);
+        let cell = this.cells.get(h);
+        if (!cell) {
+            cell = [];
+            this.cells.set(h, cell);
+        }
+        cell.push(obj);
     }
+
     getNearby(v, radius) {
         const results = [];
         const cellsToCheck = Math.ceil(radius / this.cellSize);
         const cx = Math.floor(v.x / this.cellSize), cy = Math.floor(v.y / this.cellSize), cz = Math.floor(v.z / this.cellSize);
+        
         for (let x = cx - cellsToCheck; x <= cx + cellsToCheck; x++) {
             for (let y = cy - cellsToCheck; y <= cy + cellsToCheck; y++) {
                 for (let z = cz - cellsToCheck; z <= cz + cellsToCheck; z++) {
-                    const cell = this.cells.get(`${x},${y},${z}`);
-                    if (cell) results.push(...cell);
+                    const h = (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
+                    const cell = this.cells.get(h);
+                    if (cell) {
+                        for (let i = 0; i < cell.length; i++) results.push(cell[i]);
+                    }
                 }
             }
         }
@@ -34,11 +50,12 @@ class SpatialHashGrid {
 }
 
 const BOID_TYPES = {
-    SMALL_FISH: { name: 'Small Fish', geometry: () => new THREE.ConeGeometry(0.6, 2, 6), color: 0x00d2ff, maxSpeed: 4.5, maxForce: 0.25, fearRadius: 35, glow: 0.6 },
-    LARGE_FISH: { name: 'Large Fish', geometry: () => new THREE.ConeGeometry(1.4, 4, 8), color: 0xff8c00, maxSpeed: 2.8, maxForce: 0.18, fearRadius: 45, glow: 0.8 },
-    BIRD: { name: 'Bird', geometry: () => new THREE.ConeGeometry(1.0, 3, 6), color: 0x00ff88, maxSpeed: 5.5, maxForce: 0.35, fearRadius: 50, glow: 0.7 }
+    SMALL_FISH: { name: 'Small Fish', geometry: () => new THREE.ConeGeometry(0.6, 2, 6), color: 0x00d2ff, maxSpeed: 4.5, maxForce: 0.25, fearRadiusSq: 1225, glow: 0.6 },
+    LARGE_FISH: { name: 'Large Fish', geometry: () => new THREE.ConeGeometry(1.4, 4, 8), color: 0xff8c00, maxSpeed: 2.8, maxForce: 0.18, fearRadiusSq: 2025, glow: 0.8 },
+    BIRD: { name: 'Bird', geometry: () => new THREE.ConeGeometry(1.0, 3, 6), color: 0x00ff88, maxSpeed: 5.5, maxForce: 0.35, fearRadiusSq: 2500, glow: 0.7 }
 };
 
+// Global scratch variables for zero-allocation math
 let _v1, _v2, _v3, _v4, _v5, _dummy;
 function initScratch() {
     if (_v1) return;
@@ -55,54 +72,62 @@ class Boid {
         this.acceleration = new THREE.Vector3(0, 0, 0);
         this.maxSpeed = type.maxSpeed;
         this.maxForce = type.maxForce;
-        this.matrix = new THREE.Matrix4();
+        this.active = true;
     }
 
     applyRules(neighbors, predators, foodSources, obstacles, params) {
+        if (!this.active) return null;
         this.acceleration.set(0, 0, 0);
         const sep = _v1.set(0,0,0), ali = _v2.set(0,0,0), coh = _v3.set(0,0,0);
         let sC = 0, aC = 0, cC = 0;
 
-        for (let other of neighbors) {
-            if (other === this) continue;
-            const d = this.position.distanceTo(other.position);
-            if (d < params.perception.separation && d > 0) {
-                sep.add(_v4.subVectors(this.position, other.position).normalize().divideScalar(d));
+        const sepDistSq = params.perception.separation * params.perception.separation;
+        const flockDistSq = 1225; // 35^2
+
+        for (let i = 0; i < neighbors.length; i++) {
+            const other = neighbors[i];
+            if (other === this || !other.active) continue;
+            const dSq = this.position.distanceToSquared(other.position);
+            
+            if (dSq < sepDistSq && dSq > 0) {
+                sep.add(_v4.subVectors(this.position, other.position).normalize().divideScalar(Math.sqrt(dSq)));
                 sC++;
             }
-            if (d < 35) { ali.add(other.velocity); aC++; }
-            if (d < 35) { coh.add(other.position); cC++; }
+            if (dSq < flockDistSq) {
+                ali.add(other.velocity); aC++;
+                coh.add(other.position); cC++;
+            }
         }
 
         if (sC > 0) this.acceleration.add(sep.normalize().multiplyScalar(this.maxSpeed).sub(this.velocity).clampLength(0, this.maxForce).multiplyScalar(params.forces.separation));
         if (aC > 0) this.acceleration.add(ali.normalize().multiplyScalar(this.maxSpeed).sub(this.velocity).clampLength(0, this.maxForce).multiplyScalar(params.forces.alignment));
         if (cC > 0) this.acceleration.add(coh.divideScalar(cC).sub(this.position).normalize().multiplyScalar(this.maxSpeed).sub(this.velocity).clampLength(0, this.maxForce).multiplyScalar(params.forces.cohesion));
 
-        for (let p of predators) {
-            const d = this.position.distanceTo(p.position);
-            if (d < this.type.fearRadius) {
-                const flee = _v4.subVectors(this.position, p.position).normalize().multiplyScalar(this.maxSpeed * 2.5);
+        for (let i = 0; i < predators.length; i++) {
+            const dSq = this.position.distanceToSquared(predators[i].position);
+            if (dSq < this.type.fearRadiusSq) {
+                const flee = _v4.subVectors(this.position, predators[i].position).normalize().multiplyScalar(this.maxSpeed * 2.5);
                 this.acceleration.add(flee.sub(this.velocity).clampLength(0, this.maxForce * 3).multiplyScalar(3.0));
             }
         }
 
-        for (let obs of obstacles) {
-            const d = this.position.distanceTo(obs.position);
-            if (d < 30) {
-                const avoid = _v4.subVectors(this.position, obs.position).normalize().multiplyScalar(this.maxSpeed * 2);
+        for (let i = 0; i < obstacles.length; i++) {
+            const dSq = this.position.distanceToSquared(obstacles[i].position);
+            if (dSq < 900) { // 30^2
+                const avoid = _v4.subVectors(this.position, obstacles[i].position).normalize().multiplyScalar(this.maxSpeed * 2);
                 this.acceleration.add(avoid.sub(this.velocity).clampLength(0, this.maxForce * 2.5).multiplyScalar(2.5));
             }
         }
 
-        let closestF = null, minFD = Infinity;
-        for (let f of foodSources) {
-            const d = this.position.distanceTo(f.position);
-            if (d < 60 && d < minFD) { closestF = f; minFD = d; }
+        let closestF = null, minFDSq = Infinity;
+        for (let i = 0; i < foodSources.length; i++) {
+            const dSq = this.position.distanceToSquared(foodSources[i].position);
+            if (dSq < 3600 && dSq < minFDSq) { closestF = foodSources[i]; minFDSq = dSq; }
         }
         if (closestF) {
             const seek = _v4.subVectors(closestF.position, this.position).normalize().multiplyScalar(this.maxSpeed);
             this.acceleration.add(seek.sub(this.velocity).clampLength(0, this.maxForce).multiplyScalar(1.8));
-            if (minFD < 4) return { consume: closestF };
+            if (minFDSq < 16) return { consume: closestF };
         }
 
         const m = params.bounds * 0.95;
@@ -116,23 +141,16 @@ class Boid {
     }
 
     update(params, dt) {
+        if (!this.active) return;
         this.velocity.add(this.acceleration.multiplyScalar(dt * 60));
         this.velocity.clampLength(params.speed.min, params.speed.max);
         this.position.addScaledVector(this.velocity, dt * 60);
-        _dummy.position.copy(this.position);
-        if (this.velocity.lengthSq() > 0.001) {
-            _dummy.lookAt(_v4.copy(this.position).add(this.velocity));
-            _dummy.rotateX(Math.PI / 2);
-        }
-        _dummy.updateMatrix();
-        this.matrix.copy(_dummy.matrix);
     }
 }
 
 class Predator {
     constructor(position, params) {
-        initScratch();
-        const geo = new THREE.SphereGeometry(4, 16, 16);
+        const geo = new THREE.SphereGeometry(4, 12, 12);
         const mat = new THREE.MeshPhongMaterial({ color: 0xff3333, emissive: 0xff0000, emissiveIntensity: 1.0 });
         this.mesh = new THREE.Mesh(geo, mat);
         this.position = position.clone();
@@ -143,26 +161,27 @@ class Predator {
     update(boids, params, dt) {
         const step = dt * 60;
         if (this.huntCooldown > 0) this.huntCooldown -= step;
-        let target = null, minDist = Infinity;
-        for (let b of boids) {
-            const d = this.position.distanceTo(b.position);
-            if (d < params.predators.huntRadius && d < minDist) { target = b; minDist = d; }
+        let target = null, minDistSq = Infinity;
+        const huntRadiusSq = params.predators.huntRadius * params.predators.huntRadius;
+        for (let i = 0; i < boids.length; i++) {
+            if (!boids[i].active) continue;
+            const dSq = this.position.distanceToSquared(boids[i].position);
+            if (dSq < huntRadiusSq && dSq < minDistSq) { target = boids[i]; minDistSq = dSq; }
         }
         const acc = _v4.set(0,0,0);
         let caught = null;
         if (target && this.huntCooldown <= 0) {
             acc.subVectors(target.position, this.position).normalize().multiplyScalar(this.maxSpeed).sub(this.velocity).clampLength(0, 0.6);
-            if (minDist < 6) { this.huntCooldown = 180; caught = target; }
+            if (minDistSq < 36) { this.huntCooldown = 180; caught = target; }
         } else {
             acc.set(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).multiplyScalar(0.2);
         }
         this.velocity.add(acc.multiplyScalar(step)).clampLength(0, this.maxSpeed);
         this.position.addScaledVector(this.velocity, step);
         const b = params.bounds * 1.4;
-        ['x','y','z'].forEach(axis => {
-            if (this.position[axis] > b) this.position[axis] = -b;
-            else if (this.position[axis] < -b) this.position[axis] = b;
-        });
+        if (Math.abs(this.position.x) > b) this.position.x *= -0.9;
+        if (Math.abs(this.position.y) > b) this.position.y *= -0.9;
+        if (Math.abs(this.position.z) > b) this.position.z *= -0.9;
         this.mesh.position.copy(this.position);
         return caught;
     }
@@ -208,7 +227,7 @@ class Simulation {
 
         this.setupLighting();
         this.setupEnvironment();
-        this.initInstancedMeshes(); // Speed: Initialize once with MAX_CAPACITY
+        this.initInstancedMeshes();
         this.createBoids(this.params.count);
         this.createPredators(this.params.predators.count);
         this.createFoodSources(this.params.food.count);
@@ -238,27 +257,43 @@ class Simulation {
     }
 
     initInstancedMeshes() {
-        const MAX = 2500;
-        for (let key in BOID_TYPES) {
-            const type = BOID_TYPES[key];
+        const MAX = 5000;
+        const types = [BOID_TYPES.SMALL_FISH, BOID_TYPES.LARGE_FISH, BOID_TYPES.BIRD];
+        types.forEach(type => {
             const mat = new THREE.MeshPhongMaterial({ color: type.color, shininess: 100, emissive: type.color, emissiveIntensity: type.glow });
             const imesh = new THREE.InstancedMesh(type.geometry(), mat, MAX);
             imesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
             imesh.count = 0;
             this.scene.add(imesh);
             this.instancedMeshes[type.name] = imesh;
-        }
+        });
     }
 
-    syncInstancedCounts() {
+    updateInstancedMeshes() {
         const counts = {};
-        for (let k in this.instancedMeshes) { counts[k] = 0; this.instancedMeshes[k].count = 0; }
-        this.boids.forEach(b => {
-            const name = b.type.name;
-            b.idx = counts[name];
-            counts[name]++;
-            this.instancedMeshes[name].count = counts[name];
-        });
+        for (let k in this.instancedMeshes) { counts[k] = 0; }
+        
+        for (let i = 0; i < this.boids.length; i++) {
+            const b = this.boids[i];
+            if (!b.active) continue;
+            
+            const imesh = this.instancedMeshes[b.type.name];
+            const idx = counts[b.type.name];
+            
+            _dummy.position.copy(b.position);
+            if (b.velocity.lengthSq() > 0.001) {
+                _dummy.lookAt(_v4.copy(b.position).add(b.velocity));
+                _dummy.rotateX(Math.PI / 2);
+            }
+            _dummy.updateMatrix();
+            imesh.setMatrixAt(idx, _dummy.matrix);
+            counts[b.type.name]++;
+        }
+        
+        for (let k in this.instancedMeshes) {
+            this.instancedMeshes[k].count = counts[k];
+            this.instancedMeshes[k].instanceMatrix.needsUpdate = true;
+        }
     }
 
     createBoids(count) {
@@ -268,7 +303,6 @@ class Simulation {
             const type = rand < r[0] ? BOID_TYPES.SMALL_FISH : (rand < r[0]+r[1] ? BOID_TYPES.LARGE_FISH : BOID_TYPES.BIRD);
             this.boids.push(new Boid(type, new THREE.Vector3((Math.random()-0.5)*300, (Math.random()-0.5)*300, (Math.random()-0.5)*300), this.params));
         }
-        this.syncInstancedCounts();
     }
 
     createPredators(count) {
@@ -289,7 +323,7 @@ class Simulation {
     }
 
     createObstacles(count) {
-        const geo = new THREE.SphereGeometry(12, 16, 16);
+        const geo = new THREE.SphereGeometry(12, 12, 12);
         const mat = new THREE.MeshPhongMaterial({ color: 0x1e293b, transparent: true, opacity: 0.4 });
         for (let i=0; i<count; i++) {
             const m = new THREE.Mesh(geo, mat); m.position.set((Math.random()-0.5)*250, (Math.random()-0.5)*250, (Math.random()-0.5)*250);
@@ -316,11 +350,22 @@ class Simulation {
         bind('ambient', 'ambient', this.params.lighting);
         document.getElementById('pauseResume').onclick = (e) => { this.isPaused = !this.isPaused; e.target.textContent = this.isPaused ? "Resume" : "Pause"; };
         document.getElementById('reset').onclick = () => location.reload();
-        document.getElementById('addBoids').onclick = () => this.createBoids(50);
-        document.getElementById('removeBoids').onclick = () => { this.boids.splice(-50); this.syncInstancedCounts(); };
+        document.getElementById('addBoids').onclick = () => this.createBoids(100);
+        document.getElementById('removeBoids').onclick = () => { 
+            let count = 0;
+            for (let i = this.boids.length - 1; i >= 0 && count < 100; i--) {
+                if (this.boids[i].active) { this.boids[i].active = false; count++; }
+            }
+        };
         document.getElementById('fps-view').onclick = (e) => {
             if (this.followedBoid) { this.followedBoid = null; e.target.classList.remove('active'); e.target.textContent = "Follow Boid"; this.controls.enabled = true; }
-            else if (this.boids.length > 0) { this.followedBoid = this.boids[Math.floor(Math.random()*this.boids.length)]; e.target.classList.add('active'); e.target.textContent = "Stop Following"; this.controls.enabled = false; }
+            else {
+                const activeOnes = this.boids.filter(b => b.active);
+                if (activeOnes.length > 0) {
+                    this.followedBoid = activeOnes[Math.floor(Math.random()*activeOnes.length)];
+                    e.target.classList.add('active'); e.target.textContent = "Stop Following"; this.controls.enabled = false;
+                }
+            }
         };
         window.toggleSection = (h) => {
             const c = h.nextElementSibling; const a = h.querySelector('.arrow');
@@ -330,36 +375,40 @@ class Simulation {
 
     animate() {
         requestAnimationFrame(() => this.animate());
-        const dt = Math.min(this.clock.getDelta(), 0.1);
+        const dt = Math.min(this.clock.getDelta(), 0.05);
         if (!this.isPaused) {
-            this.grid.clear(); this.boids.forEach(b => this.grid.add(b));
-            for (let i = this.boids.length - 1; i >= 0; i--) {
+            this.grid.clear();
+            for (let i = 0; i < this.boids.length; i++) if (this.boids[i].active) this.grid.add(this.boids[i]);
+            
+            for (let i = 0; i < this.boids.length; i++) {
                 const b = this.boids[i];
+                if (!b.active) continue;
                 const res = b.applyRules(this.grid.getNearby(b.position, 45), this.predators, this.foodSources, this.obstacles, this.params);
                 if (res && res.consume) {
                     const idx = this.foodSources.indexOf(res.consume);
                     if (idx !== -1) { this.scene.remove(res.consume.mesh); this.foodSources.splice(idx, 1); }
                 }
                 b.update(this.params, dt);
-                this.instancedMeshes[b.type.name].setMatrixAt(b.idx, b.matrix);
             }
-            for (let k in this.instancedMeshes) this.instancedMeshes[k].instanceMatrix.needsUpdate = true;
+            this.updateInstancedMeshes();
             this.predators.forEach(p => {
                 const caught = p.update(this.boids, this.params, dt);
-                if (caught) {
-                    const idx = this.boids.indexOf(caught);
-                    if (idx !== -1) { this.boids.splice(idx, 1); this.syncInstancedCounts(); }
-                }
+                if (caught) caught.active = false;
             });
             if (Math.random() < this.params.food.spawnRate && this.foodSources.length < 50) this.createFoodSources(1);
         }
-        if (this.followedBoid) {
-            const offset = new THREE.Vector3().copy(this.followedBoid.velocity).normalize().multiplyScalar(-35).add(new THREE.Vector3(0, 15, 0));
-            this.camera.position.lerp(new THREE.Vector3().copy(this.followedBoid.position).add(offset), 0.1);
+        if (this.followedBoid && this.followedBoid.active) {
+            const offset = _v5.copy(this.followedBoid.velocity).normalize().multiplyScalar(-35).add(_v1.set(0, 15, 0));
+            this.camera.position.lerp(_v2.copy(this.followedBoid.position).add(offset), 0.1);
             this.camera.lookAt(this.followedBoid.position);
+        } else if (this.followedBoid) {
+            this.followedBoid = null;
+            this.controls.enabled = true;
+            document.getElementById('fps-view').classList.remove('active');
+            document.getElementById('fps-view').textContent = "Follow Boid";
         }
         document.getElementById('fps').textContent = Math.round(1/(dt||0.01));
-        document.getElementById('boidCount').textContent = this.boids.length;
+        document.getElementById('boidCount').textContent = this.boids.filter(b => b.active).length;
         this.controls.update();
         if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
     }
