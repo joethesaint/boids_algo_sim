@@ -18,9 +18,10 @@ export class Simulation {
         this.followedBoid = null;
         this.lastTime = performance.now();
         this.clock = new THREE.Clock();
-        
+
         this.stats = { smallFish: 0, largeFish: 0, birds: 0 };
-        
+        this.instancedMeshes = {};
+
         this.params = {
             count: 150,
             bounds: 100,
@@ -97,12 +98,12 @@ export class Simulation {
     setupLighting() {
         this.lights.ambient = new THREE.AmbientLight(0x404040, this.params.lighting.ambient);
         this.scene.add(this.lights.ambient);
-        
+
         this.lights.directional = new THREE.DirectionalLight(0xffffff, this.params.lighting.directional);
         this.lights.directional.position.set(1, 1, 1);
         this.lights.directional.castShadow = true;
         this.scene.add(this.lights.directional);
-        
+
         const sides = [
             { name: 'right', pos: [this.params.bounds * 1.5, 0, 0], color: 0x4466aa },
             { name: 'left', pos: [-this.params.bounds * 1.5, 0, 0], color: 0xaa6644 },
@@ -123,9 +124,9 @@ export class Simulation {
         ];
         corners.forEach((c, i) => {
             const dist = this.params.bounds * 1.8;
-            this.lights[`corner${i+1}`] = new THREE.PointLight(c[3], this.params.lighting.edge * 0.7, dist);
-            this.lights[`corner${i+1}`].position.set(c[0]*dist, c[1]*dist, c[2]*dist);
-            this.scene.add(this.lights[`corner${i+1}`]);
+            this.lights[`corner${i + 1}`] = new THREE.PointLight(c[3], this.params.lighting.edge * 0.7, dist);
+            this.lights[`corner${i + 1}`].position.set(c[0] * dist, c[1] * dist, c[2] * dist);
+            this.scene.add(this.lights[`corner${i + 1}`]);
         });
     }
 
@@ -141,7 +142,7 @@ export class Simulation {
 
     setupEnvironment() {
         const boundsLine = new THREE.LineSegments(
-            new THREE.EdgesGeometry(new THREE.BoxGeometry(this.params.bounds * 2, this.params.bounds * 2, this.params.bounds * 2)), 
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(this.params.bounds * 2, this.params.bounds * 2, this.params.bounds * 2)),
             new THREE.LineBasicMaterial({ color: 0x4299e1, transparent: true, opacity: 0.4 })
         );
         this.scene.add(boundsLine);
@@ -163,30 +164,72 @@ export class Simulation {
         const ratios = [this.params.boidTypes.smallFishRatio, this.params.boidTypes.largeFishRatio, this.params.boidTypes.birdRatio];
         for (let i = 0; i < count; i++) {
             const rand = Math.random();
-            let type = rand < ratios[0] ? BOID_TYPES.SMALL_FISH : rand < ratios[0] + ratios[1] ? BOID_TYPES.LARGE_FISH : BOID_TYPES.BIRD;
-            if (type === BOID_TYPES.SMALL_FISH) this.stats.smallFish++;
-            else if (type === BOID_TYPES.LARGE_FISH) this.stats.largeFish++;
+            let typeKey = rand < ratios[0] ? 'SMALL_FISH' : rand < ratios[0] + ratios[1] ? 'LARGE_FISH' : 'BIRD';
+            let type = BOID_TYPES[typeKey];
+
+            if (typeKey === 'SMALL_FISH') this.stats.smallFish++;
+            else if (typeKey === 'LARGE_FISH') this.stats.largeFish++;
             else this.stats.birds++;
-            
-            const boid = new Boid(type, new THREE.Vector3((Math.random()-0.5)*this.params.bounds*1.5, (Math.random()-0.5)*this.params.bounds*1.5, (Math.random()-0.5)*this.params.bounds*1.5), this.params);
-            this.scene.add(boid.mesh);
+
+            const boid = new Boid(type, new THREE.Vector3((Math.random() - 0.5) * this.params.bounds * 1.5, (Math.random() - 0.5) * this.params.bounds * 1.5, (Math.random() - 0.5) * this.params.bounds * 1.5), this.params);
+            boid.typeKey = typeKey; // Store for grouping
             this.boids.push(boid);
+        }
+        this.reconstructInstancedMeshes();
+    }
+
+    reconstructInstancedMeshes() {
+        // Clear old ones
+        for (let key in this.instancedMeshes) {
+            const mesh = this.instancedMeshes[key];
+            this.scene.remove(mesh);
+            if (mesh.geometry) mesh.geometry.dispose();
+            if (mesh.material) {
+                if (Array.isArray(mesh.material)) {
+                    mesh.material.forEach(m => m.dispose());
+                } else {
+                    mesh.material.dispose();
+                }
+            }
+        }
+        this.instancedMeshes = {};
+
+        // Group boids
+        const groups = {};
+        for (let boid of this.boids) {
+            if (!groups[boid.typeKey]) groups[boid.typeKey] = [];
+            boid.instanceIndex = groups[boid.typeKey].length;
+            groups[boid.typeKey].push(boid);
+        }
+
+        // Create new ones
+        for (let key in groups) {
+            const type = BOID_TYPES[key];
+            const mesh = new THREE.InstancedMesh(type.geometry(), new THREE.MeshPhongMaterial({
+                color: type.color,
+                shininess: 100,
+                specular: 0xffffff
+            }), groups[key].length);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            this.scene.add(mesh);
+            this.instancedMeshes[key] = mesh;
         }
     }
 
     removeBoids(count) {
         for (let i = 0; i < Math.min(count, this.boids.length); i++) {
             const boid = this.boids.pop();
-            this.scene.remove(boid.mesh);
-            if (boid.type === BOID_TYPES.SMALL_FISH) this.stats.smallFish--;
-            else if (boid.type === BOID_TYPES.LARGE_FISH) this.stats.largeFish--;
+            if (boid.typeKey === 'SMALL_FISH') this.stats.smallFish--;
+            else if (boid.typeKey === 'LARGE_FISH') this.stats.largeFish--;
             else this.stats.birds--;
         }
+        this.reconstructInstancedMeshes();
     }
 
     createPredators(count) {
         for (let i = 0; i < count; i++) {
-            const p = new Predator(new THREE.Vector3((Math.random()-0.5)*this.params.bounds*1.8, (Math.random()-0.5)*this.params.bounds*1.8, (Math.random()-0.5)*this.params.bounds*1.8), this.params);
+            const p = new Predator(new THREE.Vector3((Math.random() - 0.5) * this.params.bounds * 1.8, (Math.random() - 0.5) * this.params.bounds * 1.8, (Math.random() - 0.5) * this.params.bounds * 1.8), this.params);
             this.scene.add(p.mesh);
             this.predators.push(p);
         }
@@ -204,7 +247,7 @@ export class Simulation {
         const mat = new THREE.MeshPhongMaterial({ color: 0x32cd32, transparent: true, opacity: 0.8 });
         for (let i = 0; i < count; i++) {
             const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set((Math.random()-0.5)*this.params.bounds*1.6, (Math.random()-0.5)*this.params.bounds*1.6, (Math.random()-0.5)*this.params.bounds*1.6);
+            mesh.position.set((Math.random() - 0.5) * this.params.bounds * 1.6, (Math.random() - 0.5) * this.params.bounds * 1.6, (Math.random() - 0.5) * this.params.bounds * 1.6);
             this.scene.add(mesh);
             this.foodSources.push({ mesh, position: mesh.position });
         }
@@ -222,7 +265,7 @@ export class Simulation {
         const mat = new THREE.MeshPhongMaterial({ color: 0x334155, transparent: true, opacity: 0.8 });
         for (let i = 0; i < count; i++) {
             const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set((Math.random()-0.5)*this.params.bounds*1.2, (Math.random()-0.5)*this.params.bounds*1.2, (Math.random()-0.5)*this.params.bounds*1.2);
+            mesh.position.set((Math.random() - 0.5) * this.params.bounds * 1.2, (Math.random() - 0.5) * this.params.bounds * 1.2, (Math.random() - 0.5) * this.params.bounds * 1.2);
             mesh.add(new THREE.LineSegments(new THREE.WireframeGeometry(geo), new THREE.LineBasicMaterial({ color: 0x63b3ed, transparent: true, opacity: 0.5 })));
             this.scene.add(mesh);
             this.obstacles.push(mesh);
@@ -230,9 +273,9 @@ export class Simulation {
     }
 
     reset() {
-        this.boids.forEach(b => this.scene.remove(b.mesh));
         this.boids = [];
         this.stats = { smallFish: 0, largeFish: 0, birds: 0 };
+        this.reconstructInstancedMeshes();
         this.createBoids(this.params.count);
         this.isPaused = false;
         this.isFollowingBoid = false;
@@ -250,8 +293,8 @@ export class Simulation {
 
     animate() {
         requestAnimationFrame(() => this.animate());
-        
-        const deltaTime = Math.min(this.clock.getDelta(), 0.1); 
+
+        const deltaTime = Math.min(this.clock.getDelta(), 0.1);
         const now = performance.now();
         const fps = 1000 / (now - this.lastTime);
         this.lastTime = now;
@@ -265,12 +308,12 @@ export class Simulation {
             }
 
             // Update Boids
-            const maxPerception = 30; 
-            
+            const maxPerception = 30;
+
             for (let i = 0; i < this.boids.length; i++) {
                 const boid = this.boids[i];
                 const nearby = this.grid.getNearby(boid.position, maxPerception);
-                
+
                 const res = boid.applyRules(nearby, this.predators, this.foodSources, this.obstacles, this.params);
                 if (res && res.consume) {
                     const idx = this.foodSources.indexOf(res.consume);
@@ -280,6 +323,13 @@ export class Simulation {
                     }
                 }
                 boid.update(this.params, deltaTime);
+
+                // Use the boid's pre-calculated matrix for the InstancedMesh
+                this.instancedMeshes[boid.typeKey].setMatrixAt(boid.instanceIndex, boid.matrix);
+            }
+
+            for (let key in this.instancedMeshes) {
+                this.instancedMeshes[key].instanceMatrix.needsUpdate = true;
             }
 
             // Update Predators
@@ -289,11 +339,11 @@ export class Simulation {
                 if (caught) {
                     const idx = this.boids.indexOf(caught);
                     if (idx !== -1) {
-                        this.scene.remove(caught.mesh);
-                        this.boids.splice(idx, 1);
-                        if (caught.type === BOID_TYPES.SMALL_FISH) this.stats.smallFish--;
-                        else if (caught.type === BOID_TYPES.LARGE_FISH) this.stats.largeFish--;
+                        if (caught.typeKey === 'SMALL_FISH') this.stats.smallFish--;
+                        else if (caught.typeKey === 'LARGE_FISH') this.stats.largeFish--;
                         else this.stats.birds--;
+                        this.boids.splice(idx, 1);
+                        this.reconstructInstancedMeshes();
                     }
                 }
             }

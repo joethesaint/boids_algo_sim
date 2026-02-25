@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <script src="https://unpkg.com/three@0.132.2/build/three.min.js"></script>
     <script src="https://unpkg.com/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
 </head>
+
 <body>
     <div id="title">Boids Flocking Simulation</div>
     <div id="info">
@@ -34,7 +36,7 @@
                 <button id="fps-view">Follow Random Boid</button>
             </div>
         </div>
-        
+
         <div class="control-section">
             <div class="control-header" onclick="toggleSection(this)">
                 <span>🐟 Flocking Behavior</span>
@@ -59,7 +61,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="control-section">
             <div class="control-header collapsed" onclick="toggleSection(this)">
                 <span>🧠 Advanced Behaviors</span>
@@ -71,13 +73,14 @@
                     <input type="range" id="fear" min="0" max="5" step="0.1" value="2.0">
                 </div>
                 <div class="slider-container">
-                    <div class="slider-label"><span>Food Attraction:</span><span id="food-attraction-value">1.5</span></div>
+                    <div class="slider-label"><span>Food Attraction:</span><span id="food-attraction-value">1.5</span>
+                    </div>
                     <input type="range" id="food-attraction" min="0" max="3" step="0.1" value="1.5">
                 </div>
             </div>
         </div>
     </div>
-    
+
     <div id="ecosystem-controls">
         <div class="control-section">
             <div class="control-header collapsed" onclick="toggleSection(this)">
@@ -112,7 +115,7 @@
             </div>
         </div>
     </div>
-    
+
     <div id="lighting-controls">
         <div class="control-section">
             <div class="control-header collapsed" onclick="toggleSection(this)">
@@ -125,7 +128,8 @@
                     <input type="range" id="ambient" min="0" max="1" step="0.1" value="0.5">
                 </div>
                 <div class="slider-container">
-                    <div class="slider-label"><span>Directional Light:</span><span id="directional-value">0.8</span></div>
+                    <div class="slider-label"><span>Directional Light:</span><span id="directional-value">0.8</span>
+                    </div>
                     <input type="range" id="directional" min="0" max="1" step="0.1" value="0.8">
                 </div>
                 <div class="slider-container">
@@ -143,4 +147,5 @@
         });
     </script>
 </body>
+
 </html>

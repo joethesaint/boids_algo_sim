@@ -5,6 +5,10 @@ const _vec3 = new THREE.Vector3();
 const _vec4 = new THREE.Vector3();
 const _vec5 = new THREE.Vector3();
 const _vec6 = new THREE.Vector3();
+const _vec7 = new THREE.Vector3();
+const _vec8 = new THREE.Vector3();
+const _vec9 = new THREE.Vector3();
+const _vec10 = new THREE.Vector3();
 
 export const BOID_TYPES = {
     SMALL_FISH: {
@@ -39,17 +43,12 @@ export const BOID_TYPES = {
     }
 };
 
+// Reusable helper for matrix calculations
+const _dummy = new THREE.Object3D();
+
 export class Boid {
     constructor(type, position, params) {
         this.type = type;
-        const geometry = type.geometry();
-        geometry.rotateX(Math.PI / 2);
-        const material = new THREE.MeshPhongMaterial({ 
-            color: type.color,
-            shininess: 100,
-            specular: 0xffffff
-        });
-        this.mesh = new THREE.Mesh(geometry, material);
         this.position = position.clone();
         this.velocity = new THREE.Vector3(
             (Math.random() - 0.5) * 2,
@@ -60,7 +59,7 @@ export class Boid {
         this.maxSpeed = type.maxSpeed;
         this.maxForce = type.maxForce;
         this.fearLevel = 0;
-        this.mesh.position.copy(this.position);
+        this.matrix = new THREE.Matrix4();
     }
 
     applyRules(neighbors, predators, foodSources, obstacles, params) {
@@ -70,7 +69,7 @@ export class Boid {
         const sepSteer = _vec1.set(0, 0, 0);
         const aliSum = _vec2.set(0, 0, 0);
         const cohSum = _vec3.set(0, 0, 0);
-        
+
         let sepCount = 0;
         let aliCount = 0;
         let cohCount = 0;
@@ -84,7 +83,7 @@ export class Boid {
             if (other === this) continue;
 
             const distSq = this.position.distanceToSquared(other.position);
-            
+
             if (distSq < sepDist * sepDist) {
                 const dist = Math.sqrt(distSq);
                 if (dist > 0) {
@@ -132,26 +131,23 @@ export class Boid {
             }
         }
 
-        // Avoidance, Fear, and Food (separate for now as they are usually fewer items)
-        const avoidance = this.calculateAvoidance(obstacles, params);
-        const fear = this.calculateFear(predators);
-        const foodRes = this.calculateFoodAttraction(foodSources, params);
+        // Avoidance
+        const avoidance = this.calculateAvoidance(obstacles, params); // returns _vec6
+        this.acceleration.add(_vec7.copy(avoidance).multiplyScalar(params.forces.avoidance));
 
-        avoidance.multiplyScalar(params.forces.avoidance);
-        fear.multiplyScalar(params.forces.fear);
-        
-        let foodSteer = _vec6.set(0,0,0);
+        // Fear
+        const fear = this.calculateFear(predators); // returns _vec5
+        this.acceleration.add(_vec8.copy(fear).multiplyScalar(params.forces.fear));
+
+        // Food
+        const foodRes = this.calculateFoodAttraction(foodSources, params); // returns _vec9 or {steer:_vec9, ...}
         let consume = null;
         if (foodRes.steer) {
-            foodSteer = foodRes.steer.multiplyScalar(params.forces.foodAttraction);
+            this.acceleration.add(_vec10.copy(foodRes.steer).multiplyScalar(params.forces.foodAttraction));
             consume = foodRes.consume;
-        } else {
-            foodSteer = foodRes.multiplyScalar(params.forces.foodAttraction);
+        } else if (foodRes.lengthSq && foodRes.lengthSq() > 0) {
+            this.acceleration.add(_vec10.copy(foodRes).multiplyScalar(params.forces.foodAttraction));
         }
-
-        this.acceleration.add(avoidance);
-        this.acceleration.add(fear);
-        this.acceleration.add(foodSteer);
 
         this.handleBoundaries(params);
 
@@ -159,7 +155,7 @@ export class Boid {
     }
 
     calculateAvoidance(obstacles, params) {
-        const steer = new THREE.Vector3();
+        const steer = _vec6.set(0, 0, 0);
         const perceptionRadius = params.perception.avoidance;
         for (let obstacle of obstacles) {
             const distance = this.position.distanceTo(obstacle.position);
@@ -176,7 +172,7 @@ export class Boid {
     }
 
     calculateFear(predators) {
-        const steer = new THREE.Vector3(0, 0, 0);
+        const steer = _vec5.set(0, 0, 0);
         let count = 0;
         for (let predator of predators) {
             const distance = this.position.distanceTo(predator.position);
@@ -214,15 +210,15 @@ export class Boid {
             const desired = _vec4.subVectors(closestFood.position, this.position);
             desired.normalize();
             desired.multiplyScalar(this.maxSpeed);
-            const steer = _vec5.subVectors(desired, this.velocity);
+            const steer = _vec9.subVectors(desired, this.velocity);
             steer.clampLength(0, this.maxForce);
-            
+
             if (closestDistance < 2) {
                 return { steer, consume: closestFood };
             }
             return steer;
         }
-        return _vec4.set(0,0,0);
+        return _vec9.set(0, 0, 0);
     }
 
     handleBoundaries(params) {
@@ -245,27 +241,31 @@ export class Boid {
 
     update(params, deltaTime = 1) {
         // Normalize physics to roughly 60fps equivalent if deltaTime is used
-        const dt = deltaTime * 60; 
-        
-        const scaledAcc = _vec4.copy(this.acceleration).multiplyScalar(dt);
-        this.velocity.add(scaledAcc);
+        const dt = deltaTime * 60;
+
+        _vec4.copy(this.acceleration).multiplyScalar(dt);
+        this.velocity.add(_vec4);
         this.velocity.clampLength(params.speed.min, params.speed.max);
-        
-        const scaledVel = _vec4.copy(this.velocity).multiplyScalar(dt);
-        this.position.add(scaledVel);
-        
-        this.mesh.position.copy(this.position);
+
+        _vec4.copy(this.velocity).multiplyScalar(dt);
+        this.position.add(_vec4);
+
+        // Update matrix for InstancedMesh
+        _dummy.position.copy(this.position);
         if (this.velocity.lengthSq() > 0.001) {
             const lookTarget = _vec4.copy(this.position).add(this.velocity);
-            this.mesh.lookAt(lookTarget);
+            _dummy.lookAt(lookTarget);
+            _dummy.rotateX(Math.PI / 2); // Orient cone correctly
         }
+        _dummy.updateMatrix();
+        this.matrix.copy(_dummy.matrix);
     }
 }
 
 export class Predator {
     constructor(position, params) {
         const geometry = new THREE.SphereGeometry(2.5, 12, 12);
-        const material = new THREE.MeshPhongMaterial({ 
+        const material = new THREE.MeshPhongMaterial({
             color: 0xff3333,
             shininess: 100,
             specular: 0xffffff
@@ -287,7 +287,7 @@ export class Predator {
     update(boids, params, deltaTime = 1) {
         const dt = deltaTime * 60;
         if (this.huntCooldown > 0) this.huntCooldown -= dt;
-        
+
         let closestBoid = null;
         let closestDistance = Infinity;
         for (let boid of boids) {
@@ -319,10 +319,10 @@ export class Predator {
         const scaledAcc = _vec4.copy(this.acceleration).multiplyScalar(dt);
         this.velocity.add(scaledAcc);
         this.velocity.clampLength(0, this.maxSpeed);
-        
+
         const scaledVel = _vec4.copy(this.velocity).multiplyScalar(dt);
         this.position.add(scaledVel);
-        
+
         // Wrap boundaries
         const bounds = params.bounds * 1.5;
         if (this.position.x > bounds) this.position.x = -bounds;
@@ -337,7 +337,7 @@ export class Predator {
             const lookTarget = _vec4.copy(this.position).add(this.velocity);
             this.mesh.lookAt(lookTarget);
         }
-        
+
         return caughtBoid;
     }
 }
