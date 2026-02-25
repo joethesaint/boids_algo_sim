@@ -12,7 +12,7 @@ Here are several suggestions for improving the code, ranging from performance op
 ## 2. Architecture & Code Structure
 
 *   **[DONE] Extract Components from `index.html`:** The HTML structure, CSS rules, setup logic, and simulation logic are all packed into a single 1,400+ line file. Separating this into `index.html`, `style.css`, and a `js/` directory containing modules (e.g., `Boid.js`, `Simulation.js`, `UI.js`) would make the codebase much cleaner and easier to maintain.
-*   **Use `dat.gui` or `lil-gui` for UI parameters:** The custom HTML/CSS for the sliders works, but the repetitive event binding (lines 860-960) adds a lot of boilerplate code. Implementing a lightweight parameter library like [lil-gui](https://lil-gui.georgealways.com/) (the modern standard for Three.js projects) would reduce hundreds of lines of UI markup/listeners into a few concise configuration objects.
+*   **[DONE] Use `dat.gui` or `lil-gui` for UI parameters:** The custom HTML/CSS for the sliders works, but the repetitive event binding (lines 860-960) adds a lot of boilerplate code. Implementing a lightweight parameter library like [lil-gui](https://lil-gui.georgealways.com/) (the modern standard for Three.js projects) would reduce hundreds of lines of UI markup/listeners into a few concise configuration objects.
 *   **[DONE] Frame-Rate Independent Movement:** Currently, the boid velocity update is frame-dependent: `boid.position.add(boid.velocity)`. If the user's monitor runs at 144Hz, the simulation goes over twice as fast as on a 60Hz monitor. You should calculate a `deltaTime` (time elapsed since the last frame) and multiply velocity by it, e.g., `boid.position.addScaledVector(boid.velocity, deltaTime)`.
 
 ## 3. Visual & Interaction Improvements
