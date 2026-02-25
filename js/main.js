@@ -344,7 +344,7 @@ class Simulation {
             lighting: { ambient: 0.6, bloom: 1.8, pointLight: 5.0, vignette: 1.0 },
             performance: { simSpeed: 1.0, fpsLimit: 60 },
             audio: { enabled: false, sensitivity: 1.0 },
-            features: { trails: true, food: true, predators: true, followMouse: true, layering: true, wrapSpace: false }
+            features: { trails: true, food: true, predators: true, followMouse: true, layering: true, wrapSpace: false, lightMode: false }
         };
         this.boids = []; this.predators = []; this.foodSources = []; this.obstacles = []; this.instancedMeshes = {};
         this.pointLights = [];
@@ -450,11 +450,33 @@ class Simulation {
         if (this.envMeshes.grid) this.scene.remove(this.envMeshes.grid);
         
         const b = this.params.bounds;
-        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(b * 2, b * 2, b * 2)), new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.2 }));
+        const color = this.params.features.lightMode ? 0xcbd5e1 : 0x334155;
+        const gridColor = this.params.features.lightMode ? 0xe2e8f0 : 0x1e293b;
+        
+        const edges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(b * 2, b * 2, b * 2)), 
+            new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.2 })
+        );
         this.scene.add(edges);
-        const grid = new THREE.GridHelper(b * 2, 12, 0x1e293b, 0x0f172a);
+        
+        const grid = new THREE.GridHelper(b * 2, 12, gridColor, this.params.features.lightMode ? 0xf1f5f9 : 0x0f172a);
         grid.position.y = -b; this.scene.add(grid);
         this.envMeshes = { edges, grid };
+    }
+
+    applyTheme() {
+        const isLight = this.params.features.lightMode;
+        document.body.classList.toggle('light-mode', isLight);
+        
+        const bgColor = isLight ? 0xf8fafc : 0x020205;
+        this.scene.background.set(bgColor);
+        this.scene.fog.color.set(bgColor);
+        
+        if (this.bloomPass) {
+            this.bloomPass.strength = isLight ? this.params.lighting.bloom * 0.7 : this.params.lighting.bloom;
+        }
+        
+        this.setupEnvironment();
     }
 
     initInstancedMeshes() {
@@ -574,8 +596,12 @@ class Simulation {
         bind('audio-sensitivity', 'sensitivity', this.params.audio);
         const bindToggle = (id, param) => {
             const el = document.getElementById(id); if (!el) return;
-            el.addEventListener('change', (e) => { this.params.features[param] = e.target.checked; });
+            el.addEventListener('change', (e) => { 
+                this.params.features[param] = e.target.checked; 
+                if (id === 'toggle-theme') this.applyTheme();
+            });
         };
+        bindToggle('toggle-theme', 'lightMode');
         bindToggle('toggle-mouse', 'followMouse');
         bindToggle('toggle-layering', 'layering');
         bindToggle('toggle-wrapping', 'wrapSpace');

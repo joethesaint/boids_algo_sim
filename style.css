@@ -17,6 +17,39 @@ body {
     font-family: 'Outfit', sans-serif;
     color: var(--text);
     user-select: none;
+    transition: background-color 0.5s ease;
+}
+
+body.light-mode {
+    --bg-dark: rgba(240, 244, 248, 0.9);
+    --text: #1e293b;
+    --border: rgba(0, 0, 0, 0.08);
+    --accent: #0070f3;
+    --accent-glow: rgba(0, 112, 243, 0.15);
+    background-color: #f8fafc;
+}
+
+body.light-mode #title {
+    color: #1e293b;
+    text-shadow: 0 0 15px rgba(0, 112, 243, 0.2);
+}
+
+body.light-mode button {
+    background: rgba(0, 0, 0, 0.04);
+    color: #1e293b;
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.light-mode button:hover {
+    color: #fff;
+}
+
+body.light-mode .control-section {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+body.light-mode input[type="range"] {
+    background: rgba(0, 0, 0, 0.06);
 }
 
 canvas {
