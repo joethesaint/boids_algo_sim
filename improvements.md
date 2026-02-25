@@ -1,24 +1,23 @@
-# The Solar Heart: Artistic Evolution
+# Boids Simulation: Cinematic & Technical Polish
 
-The Boids Simulation has evolved from a simple flocking experiment into a premium generative art piece titled **"The Solar Heart"**. This document summarizes the transition from technical optimization to artistic excellence.
+The Boids Simulation has been refined into a high-performance, visually stunning generative art piece. This document summarizes the technical and aesthetic improvements implemented.
 
-## 1. Visual & Artistic Enhancements (Completed)
+## 1. Visual & Aesthetic Enhancements (Completed)
 
-*   **[DONE] The Solar Heart Concept:** Replaced a static simulation with a central, pulsating "Sun" that acts as a gravitational and visual anchor. The boids now orbit this pulsar, creating complex orbital patterns.
-*   **[DONE] Cosmic Environment:** Implemented a procedural starfield with thousands of point stars and large, soft nebula glows (using back-sided spheres) to provide depth and atmosphere.
 *   **[DONE] Premium Custom Trails:** Standard line trails were replaced with a custom **ShaderMaterial** implementation. Trails now have per-vertex alpha gradients, creating a smooth "fade" effect that mimics light ribbons.
-*   **[DONE] Supernatural Bloom:** Tuned the `UnrealBloomPass` for high-intensity emissive response, making the boids and the central heart feel like they are made of pure energy.
-*   **[DONE] Organic Motion:** Added Perlin-like noise influences and central gravitational steering to make the flocking feel more like fluid or cosmic dust rather than just rigid agents.
+*   **[DONE] Supernatural Bloom:** Tuned the `UnrealBloomPass` for high-intensity emissive response, making the boids feel like energetic particles.
+*   **[DONE] Glassmorphism UI:** Implemented a modern, translucent design using backdrop filters and the "Outfit" typography for a premium control interface.
+*   **[DONE] Optimized Visual Types:** Refined the geometries and color palettes for Small Fish, Large Fish, and Birds to ensure a clean, cohesive aesthetic.
 
 ## 2. Technical & Performance Foundation (Completed)
 
-*   **[DONE] Spatial Hash Grid:** Maintains a high frame rate by only calculating interactions for nearby boids.
+*   **[DONE] Spatial Hash Grid:** Maintains a high frame rate by only calculating interactions for nearby boids, using an optimized numeric hashing system.
 *   **[DONE] Instanced Rendering:** Drastically reduced draw calls by batching boids of the same species into `InstancedMesh`.
-*   **[DONE] Glassmorphism UI:** Replaced the standard UI with a modern, translucent design using backdrop filters and the "Outfit" typography.
-*   **[DONE] Memory Efficiency:** Perpetuated the use of scratchpad vectors to ensure zero GC stutter during the "Solar" loops.
+*   **[DONE] Zero-Allocation Engine:** Re-engineered the simulation loops to use global scratch vectors, eliminating Garbage Collection stutter and ensuring maximum smoothness.
+*   **[DONE] Advanced Ecosystem Logic:** Restored and refined the predator-prey dynamics, food source consumption, and obstacle avoidance.
 
-## 3. Future Artistic Directions
+## 3. Future Directions
 
-*   **Audio Reactivity:** Making the Solar Heart pulse in sync with the beat of a music track.
-*   **Black Hole Mode:** Transitioning the Sun into a singularity that distorts the boid paths (and perhaps the visual space) more aggressively.
-*   **Color Themes:** Allow users to switch between "Supernova" (Red/Gold), "Deep Space" (Blue/White), and "Nebula" (Magenta/Cyan) palettes.
+*   **[DONE] Audio Reactivity:** Added a module to `js/main.js` that uses `AudioContext` and an `AnalyserNode` to read frequency data via microphone, or fall back to an oscillator beat if unavailable. The boid speeds and rendering bloom react dynamically to the audio!
+*   **GPU Computation:** Exploring Compute Shaders for simulating 10k+ boids on the GPU.
+*   **Advanced Obstacles:** Implementing more complex geometries or moving obstacles within the 3D space.
