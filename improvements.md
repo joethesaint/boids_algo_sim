@@ -8,16 +8,19 @@ The Boids Simulation has been refined into a high-performance, visually stunning
 *   **[DONE] Supernatural Bloom:** Tuned the `UnrealBloomPass` for high-intensity emissive response, making the boids feel like energetic particles.
 *   **[DONE] Glassmorphism UI:** Implemented a modern, translucent design using backdrop filters and the "Outfit" typography for a premium control interface.
 *   **[DONE] Optimized Visual Types:** Refined the geometries and color palettes for Small Fish, Large Fish, and Birds to ensure a clean, cohesive aesthetic.
+*   **[DONE] Dynamic Lighting Controls:** Added sliders for Point Light intensity and Vignette darkness, allowing real-time adjustment of scene brightness and artistic mood.
 
 ## 2. Technical & Performance Foundation (Completed)
 
 *   **[DONE] Spatial Hash Grid:** Maintains a high frame rate by only calculating interactions for nearby boids, using an optimized numeric hashing system.
-*   **[DONE] Instanced Rendering:** Drastically reduced draw calls by batching boids of the same species into `InstancedMesh`.
+*   **[DONE] Instanced Rendering:** Drastically reduced draw calls by batching boids of the same species into `InstancedMesh`. Now with **Slerp-based smooth rotation**.
 *   **[DONE] Zero-Allocation Engine:** Re-engineered the simulation loops to use global scratch vectors, eliminating Garbage Collection stutter and ensuring maximum smoothness.
-*   **[DONE] Advanced Ecosystem Logic:** Restored and refined the predator-prey dynamics, food source consumption, and obstacle avoidance.
+*   **[DONE] Advanced Ecosystem Logic:** Restored and refined the predator-prey dynamics, food source consumption, and obstacle avoidance. Added **Species-based avoidance** (small avoid large).
 
 ## 3. Future Directions
 
 *   **[DONE] Audio Reactivity:** Added a module to `js/main.js` that uses `AudioContext` and an `AnalyserNode` to read frequency data via microphone, or fall back to an oscillator beat if unavailable. The boid speeds and rendering bloom react dynamically to the audio!
+*   **[DONE] Mouse Influence:** Boids now respond to 3D mouse position with a smooth steering force.
+*   **[DONE] Cinematic Mode:** Press **'H'** to toggle the UI for an unobstructed view of the simulation.
 *   **GPU Computation:** Exploring Compute Shaders for simulating 10k+ boids on the GPU.
 *   **Advanced Obstacles:** Implementing more complex geometries or moving obstacles within the 3D space.

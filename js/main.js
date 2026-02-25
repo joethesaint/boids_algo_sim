@@ -129,13 +129,14 @@ class Boid {
         this.position = position.clone();
         this.velocity = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(params.speed.min);
         this.acceleration = new THREE.Vector3(0, 0, 0);
+        this.quaternion = new THREE.Quaternion();
         this.maxSpeed = type.maxSpeed;
         this.maxForce = type.maxForce;
         this.active = true;
         this.trail = scene ? new Trail(scene, type.color, 20) : null;
     }
 
-    applyRules(neighbors, predators, foodSources, obstacles, params) {
+    applyRules(neighbors, predators, foodSources, obstacles, params, mouse3D) {
         if (!this.active) return null;
         this.acceleration.set(0, 0, 0);
         const sep = _v1.set(0, 0, 0), ali = _v2.set(0, 0, 0), coh = _v3.set(0, 0, 0);
@@ -161,6 +162,31 @@ class Boid {
         if (sC > 0) this.acceleration.add(sep.normalize().multiplyScalar(this.maxSpeed).sub(this.velocity).clampLength(0, this.maxForce).multiplyScalar(params.forces.separation));
         if (aC > 0) this.acceleration.add(ali.normalize().multiplyScalar(this.maxSpeed).sub(this.velocity).clampLength(0, this.maxForce).multiplyScalar(params.forces.alignment));
         if (cC > 0) this.acceleration.add(coh.divideScalar(cC).sub(this.position).normalize().multiplyScalar(this.maxSpeed).sub(this.velocity).clampLength(0, this.maxForce).multiplyScalar(params.forces.cohesion));
+
+        // Mouse Influence
+        if (mouse3D && params.features.followMouse) {
+            const dSq = this.position.distanceToSquared(mouse3D);
+            if (dSq < 20000) {
+                const steer = _v4.subVectors(this.position, mouse3D).normalize().multiplyScalar(this.maxSpeed * 2.5);
+                this.acceleration.add(steer.sub(this.velocity).clampLength(0, this.maxForce * 3).multiplyScalar(-1.5));
+            }
+        }
+
+        // Species Interaction: Small fish avoid large fish
+        if (this.type === BOID_TYPES.SMALL_FISH) {
+            for (let i = 0; i < neighbors.length; i++) {
+                if (neighbors[i].type === BOID_TYPES.LARGE_FISH) {
+                    const dSq = this.position.distanceToSquared(neighbors[i].position);
+                    if (dSq < 1600) {
+                        const flee = _v4.subVectors(this.position, neighbors[i].position).normalize().multiplyScalar(this.maxSpeed * 1.5);
+                        this.acceleration.add(flee.sub(this.velocity).clampLength(0, this.maxForce * 2).multiplyScalar(1.2));
+                    }
+                }
+            }
+        }
+
+        // Slight Wander for natural motion
+        this.acceleration.add(_v4.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(0.3));
 
         if (params.features.predators) {
             for (let i = 0; i < predators.length; i++) {
@@ -266,12 +292,14 @@ class Simulation {
             speed: { min: 1.0, max: 5.0 },
             forces: { separation: 2.0, alignment: 1.4, cohesion: 1.1 },
             perception: { separation: 16 },
-            lighting: { ambient: 0.4, bloom: 1.8 },
+            lighting: { ambient: 0.6, bloom: 1.8, pointLight: 5.0, vignette: 1.0 },
             audio: { enabled: false, sensitivity: 1.0 },
-            features: { trails: true, food: true, predators: true }
+            features: { trails: true, food: true, predators: true, followMouse: true }
         };
         this.boids = []; this.predators = []; this.foodSources = []; this.obstacles = []; this.instancedMeshes = {};
+        this.pointLights = [];
         this.grid = new SpatialHashGrid(30); this.clock = new THREE.Clock(); this.isPaused = false; this.followedBoid = null;
+        this.mouse3D = new THREE.Vector3(); this.raycaster = new THREE.Raycaster(); this.mouse = new THREE.Vector2();
         this.audioContext = null; this.analyser = null; this.dataArray = null; this.audioSource = null;
         this.init();
     }
@@ -295,6 +323,14 @@ class Simulation {
             this.composer.addPass(new THREE.RenderPass(this.scene, this.camera));
             this.bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.8, 0.4, 0.85);
             this.composer.addPass(this.bloomPass);
+
+            // Cinematic Vignette Pass
+            this.vignettePass = new THREE.ShaderPass({
+                uniforms: { tDiffuse: { value: null }, offset: { value: 1.0 }, darkness: { value: this.params.lighting.vignette } },
+                vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+                fragmentShader: `uniform sampler2D tDiffuse; uniform float offset; uniform float darkness; varying vec2 vUv; void main() { vec4 texel = texture2D(tDiffuse, vUv); vec2 uv = (vUv - 0.5) * 2.0; float vig = smoothstep(offset, offset - darkness, length(uv)); gl_FragColor = vec4(texel.rgb * vig, texel.a); }`
+            });
+            this.composer.addPass(this.vignettePass);
         } catch (e) { console.error("Composer Error", e); }
 
         this.setupLighting();
@@ -351,9 +387,10 @@ class Simulation {
 
     setupLighting() {
         this.scene.add(new THREE.AmbientLight(0xffffff, this.params.lighting.ambient));
-        const p1 = new THREE.PointLight(0x00d2ff, 3, 1000); p1.position.set(200, 200, 200);
-        const p2 = new THREE.PointLight(0xff8c00, 2, 1000); p2.position.set(-200, -200, -200);
+        const p1 = new THREE.PointLight(0x00d2ff, this.params.lighting.pointLight, 1000); p1.position.set(200, 200, 200);
+        const p2 = new THREE.PointLight(0xff8c00, this.params.lighting.pointLight * 0.7, 1000); p2.position.set(-200, -200, -200);
         this.scene.add(p1, p2);
+        this.pointLights.push(p1, p2);
     }
 
     setupEnvironment() {
@@ -383,7 +420,12 @@ class Simulation {
             const imesh = this.instancedMeshes[b.type.name];
             const idx = counts[b.type.name];
             _dummy.position.copy(b.position);
-            if (b.velocity.lengthSq() > 0.001) { _dummy.lookAt(_v4.copy(b.position).add(b.velocity)); _dummy.rotateX(Math.PI / 2); }
+            if (b.velocity.lengthSq() > 0.001) { 
+                _dummy.lookAt(_v4.copy(b.position).add(b.velocity)); 
+                _dummy.rotateX(Math.PI / 2); 
+                b.quaternion.slerp(_dummy.quaternion, 0.12);
+            }
+            _dummy.quaternion.copy(b.quaternion);
             _dummy.updateMatrix(); imesh.setMatrixAt(idx, _dummy.matrix);
             counts[b.type.name]++;
         }
@@ -435,6 +477,13 @@ class Simulation {
                 const vEl = document.getElementById(id + '-value'); if (vEl) vEl.textContent = val;
                 if (id === 'bloom' && this.bloomPass) this.bloomPass.strength = val;
                 if (id === 'ambient') this.scene.children.filter(c => c.type === 'AmbientLight').forEach(l => l.intensity = val);
+                if (id === 'point-light' && this.pointLights.length) {
+                    this.pointLights[0].intensity = val;
+                    this.pointLights[1].intensity = val * 0.7;
+                }
+                if (id === 'vignette' && this.vignettePass) {
+                    this.vignettePass.uniforms.darkness.value = val;
+                }
             });
         };
         ['separation', 'alignment', 'cohesion'].forEach(k => bind(k, k, this.params.forces));
@@ -442,11 +491,14 @@ class Simulation {
         bind('large-fish', 'largeFishRatio', this.params.boidTypes);
         bind('bloom', 'bloom', this.params.lighting);
         bind('ambient', 'ambient', this.params.lighting);
+        bind('point-light', 'pointLight', this.params.lighting);
+        bind('vignette', 'vignette', this.params.lighting);
         bind('audio-sensitivity', 'sensitivity', this.params.audio);
         const bindToggle = (id, param) => {
             const el = document.getElementById(id); if (!el) return;
             el.addEventListener('change', (e) => { this.params.features[param] = e.target.checked; });
         };
+        bindToggle('toggle-mouse', 'followMouse');
         bindToggle('toggle-trails', 'trails');
         bindToggle('toggle-food', 'food');
         bindToggle('toggle-predators', 'predators');
@@ -478,11 +530,31 @@ class Simulation {
             }
         };
         window.toggleSection = (h) => { const c = h.nextElementSibling; const a = h.querySelector('.arrow'); c.classList.toggle('collapsed'); a.textContent = c.classList.contains('collapsed') ? '▼' : '▲'; };
+
+        window.addEventListener('mousemove', (e) => {
+            this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'h') {
+                const panels = document.querySelectorAll('.panel-container');
+                const title = document.getElementById('title');
+                const isHidden = panels[0].style.display === 'none';
+                panels.forEach(p => p.style.display = isHidden ? 'flex' : 'none');
+                if (title) title.style.display = isHidden ? 'block' : 'none';
+            }
+        });
     }
 
     animate() {
         requestAnimationFrame(() => this.animate());
         const dt = Math.min(this.clock.getDelta(), 0.05);
+
+        // Update Mouse 3D Position
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        this.raycaster.ray.intersectPlane(plane, this.mouse3D);
 
         let audioReact = 0;
         if (this.params.audio.enabled && this.analyser) {
@@ -508,7 +580,7 @@ class Simulation {
             this.grid.clear(); for (let i = 0; i < this.boids.length; i++) if (this.boids[i].active) this.grid.add(this.boids[i]);
             for (let i = 0; i < this.boids.length; i++) {
                 const b = this.boids[i]; if (!b.active) continue;
-                const res = b.applyRules(this.grid.getNearby(b.position, 45), this.predators, this.foodSources, this.obstacles, currentParams);
+                const res = b.applyRules(this.grid.getNearby(b.position, 45), this.predators, this.foodSources, this.obstacles, currentParams, this.mouse3D);
                 if (res && res.consume) { const idx = this.foodSources.indexOf(res.consume); if (idx !== -1) { this.scene.remove(res.consume.mesh); this.foodSources.splice(idx, 1); } }
                 b.update(currentParams, dt);
             }

@@ -7,14 +7,14 @@ An interactive 3D flocking simulation built with Three.js, implementing Craig Re
 
 ## Features
 
-- **Classic Boids Rules**: Separation, Alignment, and Cohesion.
+- **Classic Boids Rules**: Separation, Alignment, and Cohesion with added **Wander** and **Species Avoidance** for organic motion.
 - **Dynamic Ecosystem**: 
-  - **Species**: Small Fish, Large Fish, and Birds with distinct visual styles.
+  - **Species**: Small Fish, Large Fish, and Birds with distinct visual styles and predator-prey hierarchy.
   - **Predators**: Sophisticated hunt-and-consume cycles.
   - **Food Sources**: Dynamic energy sources that attract and nourish boids.
 - **Cinematic Visuals**:
   - **Custom Shader Trails**: GLSL-based light ribbons that fade organically over time.
-  - **Supernatural Bloom**: High-intensity light bleeding for a premium aesthetic.
+  - **Supernatural Bloom & Vignette**: Multi-pass post-processing for a premium aesthetic.
   - **Tone Mapping**: ACES Filmic for photography-grade color reproduction.
   - **Glassmorphism UI**: Modern, translucent control panel.
 - **State-of-the-Art Performance**: Optimized Spatial Hash Grid and Instanced Rendering for thousands of boids.
@@ -22,7 +22,7 @@ An interactive 3D flocking simulation built with Three.js, implementing Craig Re
 ## Optimization & Architecture
 
 - **Spatial Partitioning**: Implements a **Spatial Hash Grid** to reduce neighbor lookup complexity from $O(N^2)$ to $O(N)$ for local interactions.
-- **Instanced Rendering**: Utilizes `THREE.InstancedMesh` to render all boids of a specific species in a single draw call, minimizing GPU overhead.
+- **Instanced Rendering**: Utilizes `THREE.InstancedMesh` with **Slerped Quaternions** for butter-smooth orientation transitions.
 - **Memory Management**: Zero-allocation "hot" loops. Uses object pooling and scratchpad vectors to prevent garbage collection stuttering during simulation.
 - **Frame-Rate Independence**: Physics calculations use `deltaTime` to ensure consistent simulation speed across varying refresh rates.
 
@@ -38,6 +38,9 @@ An interactive 3D flocking simulation built with Three.js, implementing Craig Re
     *   **Left Mouse (Drag):** Rotate the camera around the simulation.
     *   **Right Mouse (Drag) / Arrows:** Pan the camera target.
     *   **Scroll Wheel:** Zoom in and out.
+*   **Interaction & Cinematic Features:**
+    *   **Mouse Field:** Boids are naturally influenced by the cursor position in 3D space.
+    *   **[H] Key:** Toggle **Cinematic Mode** to hide all UI elements for an immersive experience.
 *   **UI Panels & Features:**
     *   **Simulation Data (Left Panel):** View real-time FPS and total boid count. Add or remove boids using the buttons.
     *   **Simulation Controls (Left Panel):** Pause/resume the simulation, reset the state, or toggle "Follow Boid" mode.
