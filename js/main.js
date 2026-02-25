@@ -448,13 +448,27 @@ class Simulation {
     setupEnvironment() {
         if (this.envMeshes.edges) this.scene.remove(this.envMeshes.edges);
         if (this.envMeshes.grid) this.scene.remove(this.envMeshes.grid);
+        if (this.envMeshes.snow) this.scene.remove(this.envMeshes.snow);
         
         const b = this.params.bounds;
         const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(b * 2, b * 2, b * 2)), new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.2 }));
         this.scene.add(edges);
         const grid = new THREE.GridHelper(b * 2, 12, 0x1e293b, 0x0f172a);
         grid.position.y = -b; this.scene.add(grid);
-        this.envMeshes = { edges, grid };
+
+        // Marine Snow Particle System
+        const snowCount = 2000;
+        const snowGeo = new THREE.BufferGeometry();
+        const snowPos = new Float32Array(snowCount * 3);
+        for(let i=0; i<snowCount * 3; i++) {
+            snowPos[i] = (Math.random() - 0.5) * (b * 2.5);
+        }
+        snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
+        const snowMat = new THREE.PointsMaterial({ color: 0x88ccff, size: 0.5, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending });
+        const snow = new THREE.Points(snowGeo, snowMat);
+        this.scene.add(snow);
+
+        this.envMeshes = { edges, grid, snow };
     }
 
     initInstancedMeshes() {
@@ -625,6 +639,29 @@ class Simulation {
                 if (title) title.style.display = isHidden ? 'block' : 'none';
             }
         });
+
+        // Interactive Shockwave
+        this.renderer.domElement.addEventListener('pointerdown', () => {
+            if (!this.mouse3D || this.isPaused) return;
+            const shockRadiusSq = 10000;
+            const shockForce = 35.0;
+            for (let i = 0; i < this.boids.length; i++) {
+                const b = this.boids[i];
+                if (!b.active) continue;
+                const dSq = b.position.distanceToSquared(this.mouse3D);
+                if (dSq < shockRadiusSq && dSq > 0) {
+                    const away = _v4.subVectors(b.position, this.mouse3D).normalize();
+                    const intensity = (1.0 - (dSq / shockRadiusSq)) * shockForce;
+                    b.velocity.add(away.multiplyScalar(intensity));
+                }
+            }
+            // Briefly boost bloom for visual feedback
+            if (this.bloomPass) {
+                const orig = this.bloomPass.strength;
+                this.bloomPass.strength = orig * 2.5;
+                setTimeout(() => { if (this.bloomPass) this.bloomPass.strength = orig; }, 150);
+            }
+        });
     }
 
     animate() {
@@ -663,6 +700,12 @@ class Simulation {
                 max: (this.params.speed.max + audioReact * 6.0) * this.params.performance.simSpeed
             }
         };
+
+        // Animate Marine Snow
+        if (this.envMeshes.snow) {
+            this.envMeshes.snow.rotation.y += dt * 0.05;
+            this.envMeshes.snow.rotation.x += dt * 0.02;
+        }
 
         if (!this.isPaused) {
             this.grid.clear(); for (let i = 0; i < this.boids.length; i++) if (this.boids[i].active) this.grid.add(this.boids[i]);
