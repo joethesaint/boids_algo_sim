@@ -36,6 +36,12 @@ Simply open `index.html` in any modern web browser. No local server is required 
 - **Three.js**: Used for 3D rendering and basic physics.
 - **OrbitControls**: For intuitive scene navigation.
 - **Custom Physics**: Weighted steering behaviors for complex emergent movement.
+- **Spatial Partitioning**: Implements a **Spatial Hash Grid** to optimize neighbor lookups from $O(N^2)$ to $O(N)$, ensuring high performance even with large flocks.
+- **Frame-Rate Independence**: All movement and physics calculations use `deltaTime` to ensure consistent simulation speed across different monitor refresh rates.
+
+## AI Attribution
+
+AI was instrumental in the development of this simulation. This project was built using AI as a primary engineering tool, spanning multiple models and interfaces including **Antigravity** and the **Gemini CLI**.
 
 ## License
 
