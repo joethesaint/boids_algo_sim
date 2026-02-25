@@ -7,6 +7,7 @@ class SpatialHashGrid {
     constructor(cellSize) {
         this.cellSize = cellSize;
         this.cells = new Map();
+        this._results = []; // Pre-allocated reusable array
     }
 
     _hash(v) {
@@ -26,7 +27,7 @@ class SpatialHashGrid {
     }
 
     getNearby(v, radius) {
-        const results = [];
+        this._results.length = 0; // Clear without re-allocating
         const cellsToCheck = Math.ceil(radius / this.cellSize);
         const cx = Math.floor(v.x / this.cellSize), cy = Math.floor(v.y / this.cellSize), cz = Math.floor(v.z / this.cellSize);
         for (let x = cx - cellsToCheck; x <= cx + cellsToCheck; x++) {
@@ -35,21 +36,22 @@ class SpatialHashGrid {
                     const h = (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
                     const cell = this.cells.get(h);
                     if (cell) {
-                        for (let i = 0; i < cell.length; i++) results.push(cell[i]);
+                        for (let i = 0; i < cell.length; i++) this._results.push(cell[i]);
                     }
                 }
             }
         }
-        return results;
+        return this._results;
     }
 }
 
-// --- Custom Shader Trail Logic ---
+// --- Optimized Trail with Ring Buffer ---
 class Trail {
     constructor(scene, color, length = 20) {
         this.scene = scene;
         this.maxLength = length;
-        this.points = [];
+        this.points = new Array(length).fill(null).map(() => new THREE.Vector3());
+        this.head = 0; // Ring buffer pointer
         this.visible = true;
 
         const geometry = new THREE.BufferGeometry();
@@ -90,11 +92,16 @@ class Trail {
     update(position) {
         if (!this.visible) { this.line.visible = false; return; }
         this.line.visible = true;
-        this.points.unshift(position.clone());
-        if (this.points.length > this.maxLength) this.points.pop();
+
+        // Advance ring buffer
+        this.points[this.head].copy(position);
+        this.head = (this.head + 1) % this.maxLength;
+
         const posAttr = this.line.geometry.attributes.position;
         for (let i = 0; i < this.maxLength; i++) {
-            const p = this.points[i] || position;
+            // Read back from head to show oldest to newest
+            const idx = (this.head - 1 - i + this.maxLength) % this.maxLength;
+            const p = this.points[idx];
             this.positions[i * 3] = p.x;
             this.positions[i * 3 + 1] = p.y;
             this.positions[i * 3 + 2] = p.z;
@@ -335,6 +342,7 @@ class Simulation {
             forces: { separation: 2.0, alignment: 1.4, cohesion: 1.1 },
             perception: { separation: 16 },
             lighting: { ambient: 0.6, bloom: 1.8, pointLight: 5.0, vignette: 1.0 },
+            performance: { simSpeed: 1.0, fpsLimit: 60 },
             audio: { enabled: false, sensitivity: 1.0 },
             features: { trails: true, food: true, predators: true, followMouse: true, layering: true, wrapSpace: false }
         };
@@ -342,6 +350,7 @@ class Simulation {
         this.pointLights = [];
         this.envMeshes = { edges: null, grid: null };
         this.grid = new SpatialHashGrid(30); this.clock = new THREE.Clock(); this.isPaused = false; this.followedBoid = null;
+        this.lastFrameTime = 0;
         this.mouse3D = new THREE.Vector3(); this.raycaster = new THREE.Raycaster(); this.mouse = new THREE.Vector2();
         this.audioContext = null; this.analyser = null; this.dataArray = null; this.audioSource = null;
         this.init();
@@ -535,7 +544,7 @@ class Simulation {
             const el = document.getElementById(id); if (!el) return;
             el.addEventListener('input', (e) => {
                 const val = parseFloat(e.target.value);
-                obj[param] = id.includes('fish') || id === 'birds' ? val / 100 : val;
+                obj[param] = (id.includes('fish') || id === 'birds') ? val / 100 : val;
                 const vEl = document.getElementById(id + '-value'); if (vEl) vEl.textContent = val;
                 if (id === 'bloom' && this.bloomPass) this.bloomPass.strength = val;
                 if (id === 'ambient') this.scene.children.filter(c => c.type === 'AmbientLight').forEach(l => l.intensity = val);
@@ -560,6 +569,8 @@ class Simulation {
         bind('point-light', 'pointLight', this.params.lighting);
         bind('vignette', 'vignette', this.params.lighting);
         bind('bounds', 'bounds', this.params);
+        bind('sim-speed', 'simSpeed', this.params.performance);
+        bind('fps-limit', 'fpsLimit', this.params.performance);
         bind('audio-sensitivity', 'sensitivity', this.params.audio);
         const bindToggle = (id, param) => {
             const el = document.getElementById(id); if (!el) return;
@@ -618,7 +629,15 @@ class Simulation {
 
     animate() {
         requestAnimationFrame(() => this.animate());
-        const dt = Math.min(this.clock.getDelta(), 0.05);
+        
+        const now = performance.now();
+        const frameDuration = 1000 / this.params.performance.fpsLimit;
+        const delta = now - this.lastFrameTime;
+
+        if (delta < frameDuration) return; // Cap FPS
+
+        this.lastFrameTime = now - (delta % frameDuration);
+        const dt = Math.min(this.clock.getDelta(), 0.05) * this.params.performance.simSpeed;
 
         // Update Mouse 3D Position
         this.raycaster.setFromCamera(this.mouse, this.camera);
@@ -640,8 +659,8 @@ class Simulation {
         const currentParams = {
             ...this.params,
             speed: {
-                min: this.params.speed.min + audioReact * 2.0,
-                max: this.params.speed.max + audioReact * 6.0
+                min: (this.params.speed.min + audioReact * 2.0) * this.params.performance.simSpeed,
+                max: (this.params.speed.max + audioReact * 6.0) * this.params.performance.simSpeed
             }
         };
 
@@ -671,7 +690,7 @@ class Simulation {
             this.camera.position.lerp(_v3.copy(this.followedBoid.position).add(off), 0.1);
             this.camera.lookAt(this.followedBoid.position);
         } else if (this.followedBoid) { this.followedBoid = null; this.controls.enabled = true; document.getElementById('fps-view').classList.remove('active'); document.getElementById('fps-view').textContent = "Follow Boid"; }
-        document.getElementById('fps').textContent = Math.round(1 / (dt || 0.01));
+        document.getElementById('fps').textContent = Math.round(1 / (dt / this.params.performance.simSpeed || 0.01));
         document.getElementById('boidCount').textContent = this.boids.filter(b => b.active).length;
         this.controls.update();
         if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
