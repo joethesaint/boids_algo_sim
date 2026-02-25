@@ -1,5 +1,6 @@
 import { Boid, Predator, BOID_TYPES } from './Boid.js';
 import { setupUI, updateStats } from './UI.js';
+import { SpatialHashGrid } from './SpatialHashGrid.js';
 
 export class Simulation {
     constructor() {
@@ -15,7 +16,8 @@ export class Simulation {
         this.isPaused = false;
         this.isFollowingBoid = false;
         this.followedBoid = null;
-        this.lastTime = 0;
+        this.lastTime = performance.now();
+        this.clock = new THREE.Clock();
         
         this.stats = { smallFish: 0, largeFish: 0, birds: 0 };
         
@@ -30,6 +32,8 @@ export class Simulation {
             perception: { separation: 10, alignment: 20, cohesion: 20, avoidance: 15 },
             lighting: { ambient: 0.4, directional: 0.8, edge: 0.6 }
         };
+
+        this.grid = new SpatialHashGrid(this.params.bounds, 20);
 
         this.init();
     }
@@ -67,6 +71,7 @@ export class Simulation {
             onTogglePause: () => {
                 this.isPaused = !this.isPaused;
                 this.controls.enabled = this.isPaused;
+                if (!this.isPaused) this.clock.getDelta(); // Reset delta after pause
                 return this.isPaused;
             },
             onReset: () => this.reset(),
@@ -245,14 +250,28 @@ export class Simulation {
 
     animate() {
         requestAnimationFrame(() => this.animate());
+        
+        const deltaTime = Math.min(this.clock.getDelta(), 0.1); 
         const now = performance.now();
         const fps = 1000 / (now - this.lastTime);
         this.lastTime = now;
         updateStats(this.boids.length, this.stats, fps);
 
         if (!this.isPaused) {
-            this.boids.forEach(b => {
-                const res = b.applyRules(this.boids, this.predators, this.foodSources, this.obstacles, this.params);
+            // Update Spatial Grid
+            this.grid.clear();
+            for (let i = 0; i < this.boids.length; i++) {
+                this.grid.add(this.boids[i]);
+            }
+
+            // Update Boids
+            const maxPerception = 30; 
+            
+            for (let i = 0; i < this.boids.length; i++) {
+                const boid = this.boids[i];
+                const nearby = this.grid.getNearby(boid.position, maxPerception);
+                
+                const res = boid.applyRules(nearby, this.predators, this.foodSources, this.obstacles, this.params);
                 if (res && res.consume) {
                     const idx = this.foodSources.indexOf(res.consume);
                     if (idx !== -1) {
@@ -260,10 +279,13 @@ export class Simulation {
                         this.foodSources.splice(idx, 1);
                     }
                 }
-                b.update(this.params);
-            });
-            this.predators.forEach(p => {
-                const caught = p.update(this.boids, this.params);
+                boid.update(this.params, deltaTime);
+            }
+
+            // Update Predators
+            for (let i = 0; i < this.predators.length; i++) {
+                const p = this.predators[i];
+                const caught = p.update(this.boids, this.params, deltaTime);
                 if (caught) {
                     const idx = this.boids.indexOf(caught);
                     if (idx !== -1) {
@@ -274,14 +296,15 @@ export class Simulation {
                         else this.stats.birds--;
                     }
                 }
-            });
+            }
+
             if (Math.random() < this.params.food.spawnRate && this.foodSources.length < this.params.food.count * 2) {
                 this.createFoodSources(1);
             }
         }
 
         if (this.isFollowingBoid && this.followedBoid) {
-            const offset = this.followedBoid.velocity.clone().normalize().multiplyScalar(-10).add(new THREE.Vector3(0, 3, 0));
+            const offset = new THREE.Vector3().copy(this.followedBoid.velocity).normalize().multiplyScalar(-15).add(new THREE.Vector3(0, 5, 0));
             this.camera.position.copy(this.followedBoid.position).add(offset);
             this.camera.lookAt(this.followedBoid.position);
         }
