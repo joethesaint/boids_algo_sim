@@ -188,6 +188,13 @@ class Boid {
         // Slight Wander for natural motion
         this.acceleration.add(_v4.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(0.3));
 
+        // Ecosystem Layering
+        if (params.features.layering) {
+            const targetY = this.type === BOID_TYPES.BIRD ? params.bounds * 0.6 : -params.bounds * 0.2;
+            const distY = targetY - this.position.y;
+            this.acceleration.y += distY * 0.02;
+        }
+
         if (params.features.predators) {
             for (let i = 0; i < predators.length; i++) {
                 const dSq = this.position.distanceToSquared(predators[i].position);
@@ -219,12 +226,15 @@ class Boid {
             }
         }
 
-        const m = params.bounds * 0.95;
-        const bS = _v4.set(0, 0, 0);
-        if (this.position.x < -m) bS.x = 1; else if (this.position.x > m) bS.x = -1;
-        if (this.position.y < -m) bS.y = 1; else if (this.position.y > m) bS.y = -1;
-        if (this.position.z < -m) bS.z = 1; else if (this.position.z > m) bS.z = -1;
-        if (bS.lengthSq() > 0) this.acceleration.add(bS.normalize().multiplyScalar(this.maxSpeed).sub(this.velocity).clampLength(0, this.maxForce * 4));
+        // Boundary Logic: Only if not wrapping
+        if (!params.features.wrapSpace) {
+            const m = params.bounds * 0.95;
+            const bS = _v4.set(0, 0, 0);
+            if (this.position.x < -m) bS.x = 1; else if (this.position.x > m) bS.x = -1;
+            if (this.position.y < -m) bS.y = 1; else if (this.position.y > m) bS.y = -1;
+            if (this.position.z < -m) bS.z = 1; else if (this.position.z > m) bS.z = -1;
+            if (bS.lengthSq() > 0) this.acceleration.add(bS.normalize().multiplyScalar(this.maxSpeed).sub(this.velocity).clampLength(0, this.maxForce * 4));
+        }
 
         return null;
     }
@@ -234,6 +244,15 @@ class Boid {
         this.velocity.add(this.acceleration.multiplyScalar(dt * 60));
         this.velocity.clampLength(params.speed.min, params.speed.max);
         this.position.addScaledVector(this.velocity, dt * 60);
+
+        // Position Wrapping
+        if (params.features.wrapSpace) {
+            const m = params.bounds;
+            if (this.position.x < -m) this.position.x = m; else if (this.position.x > m) this.position.x = -m;
+            if (this.position.y < -m) this.position.y = m; else if (this.position.y > m) this.position.y = -m;
+            if (this.position.z < -m) this.position.z = m; else if (this.position.z > m) this.position.z = -m;
+        }
+
         if (this.trail) {
             this.trail.visible = params.features.trails;
             this.trail.update(this.position);
@@ -256,12 +275,19 @@ class Predator {
     update(boids, params, dt) {
         const step = dt * 60;
         if (this.huntCooldown > 0) this.huntCooldown -= step;
-        let target = null, minDistSq = Infinity;
+        let target = null, maxPriorityDistSq = -1;
         const huntRadiusSq = params.predators.huntRadius * params.predators.huntRadius;
+
         for (let i = 0; i < boids.length; i++) {
-            if (!boids[i].active) continue;
-            const dSq = this.position.distanceToSquared(boids[i].position);
-            if (dSq < huntRadiusSq && dSq < minDistSq) { target = boids[i]; minDistSq = dSq; }
+            const b = boids[i];
+            if (!b.active) continue;
+            const dSq = this.position.distanceToSquared(b.position);
+            if (dSq < huntRadiusSq) {
+                // Priority: Large Fish > Bird > Small Fish
+                const priority = (b.type === BOID_TYPES.LARGE_FISH ? 3.0 : (b.type === BOID_TYPES.BIRD ? 2.0 : 1.0));
+                const score = priority / (Math.sqrt(dSq) + 1);
+                if (score > maxPriorityDistSq) { target = b; maxPriorityDistSq = score; }
+            }
         }
         const acc = _v4.set(0, 0, 0);
         let caught = null;
@@ -273,10 +299,26 @@ class Predator {
         }
         this.velocity.add(acc.multiplyScalar(step)).clampLength(0, this.maxSpeed);
         this.position.addScaledVector(this.velocity, step);
-        const b = params.bounds * 1.4;
-        if (Math.abs(this.position.x) > b) this.position.x *= -0.9;
-        if (Math.abs(this.position.y) > b) this.position.y *= -0.9;
-        if (Math.abs(this.position.z) > b) this.position.z *= -0.9;
+
+        // Boundary/Wrapping Logic
+        if (params.features.wrapSpace) {
+            const m = params.bounds * 1.4;
+            if (this.position.x < -m) this.position.x = m; else if (this.position.x > m) this.position.x = -m;
+            if (this.position.y < -m) this.position.y = m; else if (this.position.y > m) this.position.y = -m;
+            if (this.position.z < -m) this.position.z = m; else if (this.position.z > m) this.position.z = -m;
+        } else {
+            const b = params.bounds * 1.4;
+            if (Math.abs(this.position.x) > b) this.position.x *= -0.9;
+            if (Math.abs(this.position.y) > b) this.position.y *= -0.9;
+            if (Math.abs(this.position.z) > b) this.position.z *= -0.9;
+        }
+
+        // Layering for Predators (Stay in water)
+        if (params.features.layering) {
+            const targetY = -params.bounds * 0.2;
+            this.position.y = THREE.MathUtils.lerp(this.position.y, Math.min(this.position.y, targetY + 20), 0.05);
+        }
+
         this.mesh.position.copy(this.position);
         return caught;
     }
@@ -294,10 +336,11 @@ class Simulation {
             perception: { separation: 16 },
             lighting: { ambient: 0.6, bloom: 1.8, pointLight: 5.0, vignette: 1.0 },
             audio: { enabled: false, sensitivity: 1.0 },
-            features: { trails: true, food: true, predators: true, followMouse: true }
+            features: { trails: true, food: true, predators: true, followMouse: true, layering: true, wrapSpace: false }
         };
         this.boids = []; this.predators = []; this.foodSources = []; this.obstacles = []; this.instancedMeshes = {};
         this.pointLights = [];
+        this.envMeshes = { edges: null, grid: null };
         this.grid = new SpatialHashGrid(30); this.clock = new THREE.Clock(); this.isPaused = false; this.followedBoid = null;
         this.mouse3D = new THREE.Vector3(); this.raycaster = new THREE.Raycaster(); this.mouse = new THREE.Vector2();
         this.audioContext = null; this.analyser = null; this.dataArray = null; this.audioSource = null;
@@ -394,10 +437,15 @@ class Simulation {
     }
 
     setupEnvironment() {
-        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(this.params.bounds * 2, this.params.bounds * 2, this.params.bounds * 2)), new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.2 }));
+        if (this.envMeshes.edges) this.scene.remove(this.envMeshes.edges);
+        if (this.envMeshes.grid) this.scene.remove(this.envMeshes.grid);
+        
+        const b = this.params.bounds;
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(b * 2, b * 2, b * 2)), new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.2 }));
         this.scene.add(edges);
-        const grid = new THREE.GridHelper(this.params.bounds * 2, 12, 0x1e293b, 0x0f172a);
-        grid.position.y = -this.params.bounds; this.scene.add(grid);
+        const grid = new THREE.GridHelper(b * 2, 12, 0x1e293b, 0x0f172a);
+        grid.position.y = -b; this.scene.add(grid);
+        this.envMeshes = { edges, grid };
     }
 
     initInstancedMeshes() {
@@ -414,18 +462,32 @@ class Simulation {
     }
 
     updateInstancedMeshes() {
+        const time = this.clock.elapsedTime;
         const counts = {}; for (let k in this.instancedMeshes) counts[k] = 0;
         for (let i = 0; i < this.boids.length; i++) {
             const b = this.boids[i]; if (!b.active) continue;
             const imesh = this.instancedMeshes[b.type.name];
             const idx = counts[b.type.name];
             _dummy.position.copy(b.position);
+
+            // Motion Style Animation
+            let s = 1.0, r = 0;
+            if (b.type === BOID_TYPES.BIRD) {
+                s = 1.0 + Math.sin(time * 12) * 0.3; // Flapping wing effect (scale X)
+            } else if (b.type === BOID_TYPES.LARGE_FISH) {
+                r = Math.sin(time * 4) * 0.2; // Slow powerful tail wag
+            } else if (b.type === BOID_TYPES.SMALL_FISH) {
+                r = Math.sin(time * 15) * 0.15; // High freq small tail wag
+            }
+
             if (b.velocity.lengthSq() > 0.001) { 
                 _dummy.lookAt(_v4.copy(b.position).add(b.velocity)); 
                 _dummy.rotateX(Math.PI / 2); 
+                _dummy.rotateZ(r); // Apply tail wag
                 b.quaternion.slerp(_dummy.quaternion, 0.12);
             }
             _dummy.quaternion.copy(b.quaternion);
+            _dummy.scale.set(b.type === BOID_TYPES.BIRD ? s : 1, 1, b.type === BOID_TYPES.BIRD ? 1 : 1);
             _dummy.updateMatrix(); imesh.setMatrixAt(idx, _dummy.matrix);
             counts[b.type.name]++;
         }
@@ -484,6 +546,10 @@ class Simulation {
                 if (id === 'vignette' && this.vignettePass) {
                     this.vignettePass.uniforms.darkness.value = val;
                 }
+                if (id === 'bounds') {
+                    this.params.bounds = val;
+                    this.setupEnvironment();
+                }
             });
         };
         ['separation', 'alignment', 'cohesion'].forEach(k => bind(k, k, this.params.forces));
@@ -493,12 +559,15 @@ class Simulation {
         bind('ambient', 'ambient', this.params.lighting);
         bind('point-light', 'pointLight', this.params.lighting);
         bind('vignette', 'vignette', this.params.lighting);
+        bind('bounds', 'bounds', this.params);
         bind('audio-sensitivity', 'sensitivity', this.params.audio);
         const bindToggle = (id, param) => {
             const el = document.getElementById(id); if (!el) return;
             el.addEventListener('change', (e) => { this.params.features[param] = e.target.checked; });
         };
         bindToggle('toggle-mouse', 'followMouse');
+        bindToggle('toggle-layering', 'layering');
+        bindToggle('toggle-wrapping', 'wrapSpace');
         bindToggle('toggle-trails', 'trails');
         bindToggle('toggle-food', 'food');
         bindToggle('toggle-predators', 'predators');

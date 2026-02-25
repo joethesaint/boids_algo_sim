@@ -7,8 +7,14 @@ An interactive 3D flocking simulation built with Three.js, implementing Craig Re
 
 ## Features
 
-- **Classic Boids Rules**: Separation, Alignment, and Cohesion with added **Wander** and **Species Avoidance** for organic motion.
-- **Dynamic Ecosystem**: 
+- **Living Ecosystem (NEW)**:
+  - **Ecosystem Layering**: Species now respect their natural habitats; birds soar in the sky while fish stay in the depths.
+  - **Infinite Wrapping Space**: Toggleable toroidal space that allows the flock to roam without boundaries.
+  - **Dynamic Motion Styles**: Realistic tail-wagging for fish and flapping for birds using procedural animation.
+  - **Predator Priority Logic**: Predators now exhibit more sophisticated hunting behaviors, prioritizing larger targets.
+  - **Adjustable Space Scale**: Dynamically compress or enlarge the simulation environment in real-time.
+- **Classic Boids Rules**: Separation, Alignment, and Cohesion with added **Wander** and **Species Avoidance**.
+- **Dynamic Species**: 
   - **Species**: Small Fish, Large Fish, and Birds with distinct visual styles and predator-prey hierarchy.
   - **Predators**: Sophisticated hunt-and-consume cycles.
   - **Food Sources**: Dynamic energy sources that attract and nourish boids.

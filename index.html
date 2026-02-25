@@ -98,6 +98,11 @@
                         <input type="range" id="bloom" min="0" max="5" step="0.1" value="1.8">
                     </div>
                     <div class="slider-container">
+                        <div class="slider-label"><span>Space Scale</span><span id="bounds-value">150</span>
+                        </div>
+                        <input type="range" id="bounds" min="50" max="400" step="10" value="150">
+                    </div>
+                    <div class="slider-container">
                         <div class="slider-label"><span>Point Light</span><span id="point-light-value">5.0</span>
                         </div>
                         <input type="range" id="point-light" min="0" max="10" step="0.5" value="5.0">
@@ -123,6 +128,8 @@
                 </div>
                 <div class="control-content">
                     <label class="toggle-row"><input type="checkbox" id="toggle-mouse" checked> <span>Mouse Interaction</span></label>
+                    <label class="toggle-row"><input type="checkbox" id="toggle-layering" checked> <span>Ecosystem Layering</span></label>
+                    <label class="toggle-row"><input type="checkbox" id="toggle-wrapping"> <span>Infinite Wrapping</span></label>
                     <label class="toggle-row"><input type="checkbox" id="toggle-trails" checked> <span>Enable
                             Trails</span></label>
                     <label class="toggle-row"><input type="checkbox" id="toggle-food" checked> <span>Enable Food
