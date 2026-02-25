@@ -5,15 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Boids Flocking Simulation</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Base Three.js -->
     <script src="https://unpkg.com/three@0.132.2/build/three.min.js"></script>
     <script src="https://unpkg.com/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
-    <!-- Post-processing scripts -->
-    <script src="https://unpkg.com/three@0.132.2/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="https://unpkg.com/three@0.132.2/examples/js/postprocessing/RenderPass.js"></script>
+    
+    <!-- Post-processing Core (Specific Order Required) -->
+    <script src="https://unpkg.com/three@0.132.2/examples/js/postprocessing/Pass.js"></script>
     <script src="https://unpkg.com/three@0.132.2/examples/js/postprocessing/ShaderPass.js"></script>
-    <script src="https://unpkg.com/three@0.132.2/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://unpkg.com/three@0.132.2/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://unpkg.com/three@0.132.2/examples/js/postprocessing/EffectComposer.js"></script>
+    
+    <!-- Shaders & Effects -->
     <script src="https://unpkg.com/three@0.132.2/examples/js/shaders/CopyShader.js"></script>
     <script src="https://unpkg.com/three@0.132.2/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://unpkg.com/three@0.132.2/examples/js/postprocessing/UnrealBloomPass.js"></script>
 </head>
 <body>
     <div id="title">Boids Simulation</div>
@@ -23,15 +28,15 @@
         <div class="stats-row">Boids: <span id="boidCount">0</span></div>
         <div class="stats-row">FPS: <span id="fps">0</span></div>
         <div class="button-group">
-            <button id="addBoids">+10</button>
-            <button id="removeBoids">-10</button>
+            <button id="addBoids">+50 Boids</button>
+            <button id="removeBoids">-50</button>
         </div>
     </div>
 
     <div id="controls">
         <div class="control-section">
             <div class="control-header" onclick="toggleSection(this)">
-                <span>🎮 Main Controls</span>
+                <span>🎮 Simulation</span>
                 <span class="arrow">▼</span>
             </div>
             <div class="control-content">
@@ -43,21 +48,21 @@
         
         <div class="control-section">
             <div class="control-header" onclick="toggleSection(this)">
-                <span>🐟 Flocking Weights</span>
+                <span>🐟 Behaviors</span>
                 <span class="arrow">▼</span>
             </div>
             <div class="control-content">
                 <div class="slider-container">
-                    <div class="slider-label"><span>Separation</span><span id="separation-value">1.5</span></div>
-                    <input type="range" id="separation" min="0" max="3" step="0.1" value="1.5">
+                    <div class="slider-label"><span>Separation</span><span id="separation-value">1.8</span></div>
+                    <input type="range" id="separation" min="0" max="5" step="0.1" value="1.8">
                 </div>
                 <div class="slider-container">
-                    <div class="slider-label"><span>Alignment</span><span id="alignment-value">1.0</span></div>
-                    <input type="range" id="alignment" min="0" max="3" step="0.1" value="1.0">
+                    <div class="slider-label"><span>Alignment</span><span id="alignment-value">1.2</span></div>
+                    <input type="range" id="alignment" min="0" max="5" step="0.1" value="1.2">
                 </div>
                 <div class="slider-container">
                     <div class="slider-label"><span>Cohesion</span><span id="cohesion-value">1.0</span></div>
-                    <input type="range" id="cohesion" min="0" max="3" step="0.1" value="1.0">
+                    <input type="range" id="cohesion" min="0" max="5" step="0.1" value="1.0">
                 </div>
             </div>
         </div>
@@ -66,40 +71,21 @@
     <div id="ecosystem-controls">
         <div class="control-section">
             <div class="control-header collapsed" onclick="toggleSection(this)">
-                <span>🌊 Ecosystem</span>
+                <span>🌊 Environment</span>
                 <span class="arrow">▼</span>
             </div>
             <div class="control-content collapsed">
                 <div class="slider-container">
-                    <div class="slider-label"><span>Small Fish %</span><span id="small-fish-value">60</span></div>
-                    <input type="range" id="small-fish" min="0" max="100" step="5" value="60">
+                    <div class="slider-label"><span>Small Fish %</span><span id="small-fish-value">50</span></div>
+                    <input type="range" id="small-fish" min="0" max="100" step="5" value="50">
                 </div>
                 <div class="slider-container">
                     <div class="slider-label"><span>Large Fish %</span><span id="large-fish-value">30</span></div>
                     <input type="range" id="large-fish" min="0" max="100" step="5" value="30">
                 </div>
                 <div class="slider-container">
-                    <div class="slider-label"><span>Birds %</span><span id="birds-value">10</span></div>
-                    <input type="range" id="birds" min="0" max="100" step="5" value="10">
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="lighting-controls">
-        <div class="control-section">
-            <div class="control-header collapsed" onclick="toggleSection(this)">
-                <span>💡 Visuals</span>
-                <span class="arrow">▼</span>
-            </div>
-            <div class="control-content collapsed">
-                <div class="slider-container">
-                    <div class="slider-label"><span>Ambient</span><span id="ambient-value">0.4</span></div>
-                    <input type="range" id="ambient" min="0" max="1" step="0.1" value="0.4">
-                </div>
-                <div class="slider-container">
-                    <div class="slider-label"><span>Bloom</span><span id="bloom-value">1.5</span></div>
-                    <input type="range" id="bloom" min="0" max="3" step="0.1" value="1.5">
+                    <div class="slider-label"><span>Bloom Intensity</span><span id="bloom-value">1.5</span></div>
+                    <input type="range" id="bloom" min="0" max="4" step="0.1" value="1.5">
                 </div>
             </div>
         </div>

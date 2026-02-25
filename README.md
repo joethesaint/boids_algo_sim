@@ -7,19 +7,14 @@ An interactive 3D flocking simulation built with Three.js, implementing Craig Re
 
 ## Features
 
+- **The Solar Heart**: A central, pulsating power source that dictates the orbit and flow of the entire boid collective.
 - **Classic Boids Rules**: Separation, Alignment, and Cohesion.
-- **Dynamic Ecosystem**: 
-  - **Species**: Small Fish, Large Fish, and Birds with different behaviors and perception radii.
-  - **Predators**: Hunt boids with cooldown periods and sophisticated targeting.
-  - **Food Sources**: Attract boids and can be consumed/respawned.
 - **Cinematic Visuals**:
-  - **Real-time Glow**: UnrealBloomPass for soft light bleeding.
-  - **Ambient Occlusion**: SSAOPass for depth shadows in dense swarms.
-  - **Tone Mapping**: ACES Filmic tone mapping for a professional photorealistic look.
-- **Interactive Controls**:
-  - Adjust flocking weights and perception ranges in real-time.
-  - Modify ecosystem ratios and predator behavior.
-- **State-of-the-Art Performance**: Capable of simulating thousands of boids smoothly on modern hardware.
+  - **Dynamic Nebula Starfield**: Thousands of stars and cosmic glows.
+  - **Custom Light Ribbons**: Shader-based trails that fade organically over time.
+  - **Supernatural Bloom**: High-intensity light bleeding for a "solar" feel.
+  - **Tone Mapping**: ACES Filmic for photography-grade color reproduction.
+- **State-of-the-Art Performance**: Optimized Spatial Hash Grid and Instanced Rendering.
 
 ## Optimization & Architecture
 

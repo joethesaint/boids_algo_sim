@@ -2,71 +2,72 @@
     --bg-dark: rgba(15, 23, 42, 0.85);
     --border-color: #334155;
     --text-main: #e2e8f0;
-    --accent-blue: #63b3ed;
+    --bg-dark: rgba(5, 5, 12, 0.8);
+    --border-color: #334155; /* Kept from original */
+    --text-main: #e2e8f0; /* Kept from original */
+    --accent-blue: #63b3ed; /* Kept from original */
     --accent-hover: #4299e1;
     --danger: #e53e3e;
     --success: #38a169;
+    --accent: #00d2ff;
+    --accent-glow: rgba(0, 210, 255, 0.3);
+    --border: rgba(255, 255, 255, 0.1);
 }
 
-body { 
-    margin: 0; 
-    overflow: hidden; 
-    background-color: #05050a;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    color: var(--text-main);
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: #020205;
+    font-family: 'Outfit', sans-serif;
+    color: #e2e8f0;
 }
 
-canvas { 
-    display: block; 
+canvas {
+    display: block;
 }
 
 /* UI Containers */
 #info, #controls, #ecosystem-controls, #lighting-controls {
     position: absolute;
+    z-index: 10;
+}
+
+.glass-panel {
     background: var(--bg-dark);
-    padding: 15px;
-    border-radius: 12px;
-    font-size: 14px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    border: 1px solid var(--border-color);
-    backdrop-filter: blur(8px);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    pointer-events: auto;
 }
 
 #info {
-    top: 20px;
-    left: 20px;
+    top: 30px;
+    left: 30px;
+    width: 220px;
+    padding: 20px;
+}
+
+#controls, #ecosystem-controls, #lighting-controls {
     width: 260px;
 }
 
-#controls {
-    bottom: 20px;
-    left: 20px;
-    width: 280px;
-}
-
-#ecosystem-controls {
-    bottom: 20px;
-    right: 20px;
-    width: 280px;
-}
-
-#lighting-controls {
-    top: 20px;
-    right: 20px;
-    width: 220px;
-}
+#controls { bottom: 30px; left: 30px; }
+#ecosystem-controls { bottom: 30px; right: 30px; }
+#lighting-controls { top: 30px; right: 30px; }
 
 #title {
     position: absolute;
-    top: 25px;
+    top: 30px;
     width: 100%;
     text-align: center;
-    color: var(--accent-blue);
+    color: #fff;
     font-size: 32px;
-    font-weight: 800;
-    letter-spacing: 2px;
+    font-weight: 600;
+    letter-spacing: 4px;
     text-transform: uppercase;
-    text-shadow: 0 0 20px rgba(99, 179, 237, 0.4);
+    text-shadow: 0 0 20px rgba(0, 210, 255, 0.5);
     pointer-events: none;
     z-index: 10;
 }
@@ -74,30 +75,42 @@ canvas {
 /* Sections */
 .control-section {
     margin-bottom: 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: 12px;
     overflow: hidden;
-    background: rgba(30, 41, 59, 0.4);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .control-header {
-    background: rgba(51, 65, 85, 0.4);
-    padding: 10px 15px;
+    padding: 12px 16px;
     cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
     font-weight: 600;
-    color: var(--accent-blue);
-    transition: background 0.2s;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: background 0.3s;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--accent-blue); /* Kept from original */
 }
 
 .control-header:hover {
-    background: rgba(51, 65, 85, 0.6);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.control-header .arrow {
+    font-size: 10px;
+    transition: transform 0.3s;
+}
+
+.control-header.collapsed .arrow {
+    transform: rotate(-90deg);
 }
 
 .control-content {
-    padding: 15px;
+    padding: 16px;
     display: block;
 }
 
@@ -113,19 +126,18 @@ canvas {
 .slider-label {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 6px;
     font-size: 12px;
-    opacity: 0.9;
+    margin-bottom: 6px;
+    opacity: 0.7;
 }
 
 input[type="range"] {
     width: 100%;
-    height: 6px;
-    background: #1e293b;
-    border-radius: 3px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    appearance: none;
     outline: none;
-    -webkit-appearance: none;
-    accent-color: var(--accent-blue);
 }
 
 input[type="range"]::-webkit-slider-thumb {
