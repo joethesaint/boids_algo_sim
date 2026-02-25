@@ -37,6 +37,7 @@ Simply open `index.html` in any modern web browser. No local server is required 
 - **OrbitControls**: For intuitive scene navigation.
 - **Custom Physics**: Weighted steering behaviors for complex emergent movement.
 - **Spatial Partitioning**: Implements a **Spatial Hash Grid** to optimize neighbor lookups from $O(N^2)$ to $O(N)$, ensuring high performance even with large flocks.
+- **Instanced Rendering**: Uses `THREE.InstancedMesh` to render hundreds of boids in a single draw call, drastically reducing GPU overhead and CPU-to-GPU communication.
 - **Frame-Rate Independence**: All movement and physics calculations use `deltaTime` to ensure consistent simulation speed across different monitor refresh rates.
 
 ## AI Attribution
