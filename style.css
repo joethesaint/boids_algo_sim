@@ -85,18 +85,15 @@ canvas {
 
 .glass-panel {
     /* Clear liquid glass: a flat, near-transparent tint (no gradient wash)
-       so the simulation reads clearly through it; thin 1px edge lines
-       (not a fill) stand in for a curved glass rim catching light. */
+       so the simulation reads clearly through it. No border/edge outline —
+       just a soft ambient drop shadow for depth. */
     background: var(--bg-dark);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid var(--glass-border);
     border-radius: 22px;
     box-shadow:
         0 24px 48px -12px rgba(0, 0, 0, 0.45),
-        0 2px 10px rgba(0, 0, 0, 0.2),
-        inset 0 1px 0 var(--glass-edge-hi),
-        inset 0 -1px 0 var(--glass-edge-lo);
+        0 2px 10px rgba(0, 0, 0, 0.2);
     pointer-events: auto;
     width: 100%;
     box-sizing: border-box;
