@@ -691,6 +691,20 @@ class Simulation {
 
         this.applyMobileDefaults();
 
+        // Auto-hide UI: the title + both glass panels fade out after 5s of no
+        // interaction, leaving a clean, unobstructed view of the simulation.
+        // Any pointer, key or scroll activity wakes it back up.
+        let idleTimer = null;
+        const wakeUI = () => {
+            document.body.classList.remove('ui-idle');
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => document.body.classList.add('ui-idle'), 5000);
+        };
+        ['pointerdown', 'pointermove', 'wheel', 'keydown'].forEach(evt =>
+            window.addEventListener(evt, wakeUI, { passive: true })
+        );
+        wakeUI();
+
         // Pointer Events unify mouse, touch and pen — this drives both the "Mouse
         // Interaction" boid steering and the click/tap shockwave on mobile.
         window.addEventListener('pointermove', (e) => {
