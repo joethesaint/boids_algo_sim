@@ -1,13 +1,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
 
 :root {
-    --bg-dark: rgba(5, 5, 12, 0.85);
+    --bg-dark: rgba(8, 12, 20, 0.34);
     --accent: #00d2ff;
     --accent-glow: rgba(0, 210, 255, 0.3);
     --border: rgba(255, 255, 255, 0.1);
-    --text: #e2e8f0;
+    --text: #eef4f9;
     --danger: #ff4d4d;
     --success: #00ff88;
+
+    /* Liquid glass system */
+    --glass-sheen: rgba(255, 255, 255, 0.4);
+    --glass-edge-hi: rgba(255, 255, 255, 0.55);
+    --glass-edge-lo: rgba(0, 0, 0, 0.25);
+    --glass-border: rgba(255, 255, 255, 0.22);
+    --glass-blur: blur(24px) saturate(180%) brightness(1.08);
 }
 
 html, body {
@@ -58,16 +65,34 @@ canvas {
 }
 
 .glass-panel {
-    background: var(--bg-dark);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    /* Layered like a pane of liquid glass: a soft top-left sheen catching
+       light, a faint diagonal tint, then the dark base showing through. */
+    background:
+        radial-gradient(130% 90% at 18% -12%, var(--glass-sheen), rgba(255, 255, 255, 0) 55%),
+        linear-gradient(155deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 45%, rgba(255, 255, 255, 0.07) 100%),
+        var(--bg-dark);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: 22px;
+    box-shadow:
+        0 24px 48px -12px rgba(0, 0, 0, 0.55),
+        0 2px 10px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 var(--glass-edge-hi),
+        inset 0 -1px 0 var(--glass-edge-lo),
+        inset 1px 0 0 rgba(255, 255, 255, 0.12),
+        inset -1px 0 0 rgba(0, 0, 0, 0.15);
     pointer-events: auto;
     width: 100%;
     box-sizing: border-box;
     flex-shrink: 0;
+}
+
+/* No backdrop-filter support: fall back to a more opaque glass so text stays legible */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass-panel, .mobile-toggle {
+        background-color: rgba(8, 12, 20, 0.92);
+    }
 }
 
 #info {
@@ -90,13 +115,14 @@ canvas {
     opacity: 0.9;
 }
 
-/* Sections */
+/* Sections: recessed glass "cards" nested inside a panel */
 .control-section {
     margin-bottom: 14px;
-    border-radius: 14px;
+    border-radius: 16px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: linear-gradient(155deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .control-header {
@@ -110,12 +136,12 @@ canvas {
     text-transform: uppercase;
     letter-spacing: 1.2px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    background: rgba(255, 255, 255, 0.04);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
     color: var(--accent);
 }
 
 .control-header:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04));
     color: #fff;
 }
 
@@ -153,28 +179,40 @@ canvas {
 
 input[type="range"] {
     width: 100%;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 4px;
+    height: 5px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.14));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
     appearance: none;
     outline: none;
     margin: 10px 0;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 input[type="range"]::-webkit-slider-thumb {
     appearance: none;
     width: 16px;
     height: 16px;
-    background: #fff;
+    background: radial-gradient(circle at 32% 28%, #fff, #cfeeff 55%, #fff 100%);
     border: 2px solid var(--accent);
     border-radius: 50%;
     cursor: pointer;
-    box-shadow: 0 0 15px var(--accent-glow);
+    box-shadow: 0 0 15px var(--accent-glow), inset 0 1px 1px rgba(255, 255, 255, 0.9);
     transition: transform 0.2s;
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
     transform: scale(1.2);
+}
+
+input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: radial-gradient(circle at 32% 28%, #fff, #cfeeff 55%, #fff 100%);
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 15px var(--accent-glow), inset 0 1px 1px rgba(255, 255, 255, 0.9);
 }
 
 /* Toggles */
@@ -183,6 +221,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
     align-items: center;
     gap: 10px;
     margin: 10px 0;
+    padding: 6px 8px;
+    border-radius: 10px;
     font-size: 13px;
     cursor: pointer;
     opacity: 0.9;
@@ -190,6 +230,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 .toggle-row:hover {
     opacity: 1;
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .toggle-row input[type="checkbox"] {
@@ -199,13 +240,15 @@ input[type="range"]::-webkit-slider-thumb:hover {
     cursor: pointer;
 }
 
-/* Buttons */
+/* Buttons: glass "capsules" with a diagonal sheen that sweeps on hover */
 button {
-    background: rgba(255, 255, 255, 0.06);
+    background: linear-gradient(155deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 60%, rgba(255, 255, 255, 0.09) 100%);
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
     color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     padding: 12px;
-    border-radius: 10px;
+    border-radius: 12px;
     cursor: pointer;
     margin: 6px 0;
     width: 100%;
@@ -214,14 +257,45 @@ button {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 1px;
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    box-shadow:
+        0 6px 16px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.2);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+button::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 0 -60%;
+    width: 40%;
+    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    transform: skewX(-20deg) translateX(0);
+    transition: transform 0.6s ease;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+}
+
+button:hover::after {
+    transform: skewX(-20deg) translateX(480%);
+}
+
 button:hover {
-    background: var(--accent);
-    border-color: var(--accent);
-    box-shadow: 0 0 20px var(--accent-glow);
-    color: #000;
+    background: linear-gradient(155deg, rgba(0, 210, 255, 0.55) 0%, rgba(0, 210, 255, 0.22) 100%);
+    border-color: rgba(0, 210, 255, 0.6);
+    box-shadow:
+        0 8px 22px var(--accent-glow),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+    color: #001417;
+    transform: translateY(-1px);
+}
+
+button:active {
+    transform: translateY(0) scale(0.98);
 }
 
 .button-group {
@@ -236,9 +310,10 @@ button:hover {
 }
 
 #fps-view.active {
-    background: var(--success);
-    color: #000;
+    background: linear-gradient(155deg, rgba(0, 255, 136, 0.55), rgba(0, 255, 136, 0.22));
+    color: #00190d;
     border-color: var(--success);
+    box-shadow: 0 8px 22px rgba(0, 255, 136, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 /* Stats */
@@ -279,6 +354,16 @@ strong {
     line-height: 1;
     align-items: center;
     justify-content: center;
+    background:
+        radial-gradient(120% 120% at 25% 15%, var(--glass-sheen), rgba(255, 255, 255, 0) 55%),
+        linear-gradient(155deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    box-shadow:
+        0 10px 26px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 var(--glass-edge-hi),
+        inset 0 -1px 0 var(--glass-edge-lo);
 }
 
 #toggle-left-panel { left: max(16px, env(safe-area-inset-left)); }
@@ -288,7 +373,9 @@ strong {
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.55);
+    background: rgba(2, 2, 8, 0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     z-index: 15;
     opacity: 0;
     transition: opacity 0.3s ease;
@@ -355,10 +442,6 @@ strong {
     input[type="range"]::-moz-range-thumb {
         width: 22px;
         height: 22px;
-        background: #fff;
-        border: 2px solid var(--accent);
-        border-radius: 50%;
-        cursor: pointer;
     }
 
     button, .control-header, .toggle-row {
