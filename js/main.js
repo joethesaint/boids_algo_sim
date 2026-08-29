@@ -691,19 +691,12 @@ class Simulation {
 
         this.applyMobileDefaults();
 
-        // Auto-hide UI: the title + both glass panels fade out after 5s of no
-        // interaction, leaving a clean, unobstructed view of the simulation.
-        // Any pointer, key or scroll activity wakes it back up.
-        let idleTimer = null;
-        const wakeUI = () => {
-            document.body.classList.remove('ui-idle');
-            clearTimeout(idleTimer);
-            idleTimer = setTimeout(() => document.body.classList.add('ui-idle'), 5000);
-        };
-        ['pointerdown', 'pointermove', 'wheel', 'keydown'].forEach(evt =>
-            window.addEventListener(evt, wakeUI, { passive: true })
-        );
-        wakeUI();
+        // The "Boids Simulation" title fades out once, 5s after load, leaving
+        // a clean view of the simulation. Panels are unaffected by this.
+        setTimeout(() => {
+            const title = document.getElementById('title');
+            if (title) title.classList.add('faded');
+        }, 5000);
 
         // Pointer Events unify mouse, touch and pen — this drives both the "Mouse
         // Interaction" boid steering and the click/tap shockwave on mobile.
@@ -718,7 +711,10 @@ class Simulation {
                 const title = document.getElementById('title');
                 const isHidden = panels[0].style.display === 'none';
                 panels.forEach(p => p.style.display = isHidden ? 'flex' : 'none');
-                if (title) title.style.display = isHidden ? 'block' : 'none';
+                if (title) {
+                    title.style.display = isHidden ? 'block' : 'none';
+                    if (isHidden) title.classList.remove('faded'); // manual show overrides the 5s auto-fade
+                }
             }
         });
 

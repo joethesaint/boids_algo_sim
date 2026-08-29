@@ -345,19 +345,13 @@ strong {
     transition: background-color 0.3s, color 0.3s, border-color 0.3s, opacity 0.3s;
 }
 
-/* Auto-hide UI: after 5s idle (see main.js), the whole overlay fades out so
-   the clear glass doesn't sit over the simulation indefinitely. Any pointer,
-   key or scroll interaction brings it back. */
-#title,
-.panel-container,
-.glass-panel {
-    transition: opacity 1.1s ease;
+/* The "Boids Simulation" title text fades out once, 5s after load (see
+   main.js), leaving a clean view of the simulation. Panels are unaffected. */
+#title {
+    transition: opacity 1.5s ease;
 }
 
-body.ui-idle #title,
-body.ui-idle .panel-container,
-body.ui-idle .glass-panel,
-body.ui-idle .mobile-toggle {
+#title.faded {
     opacity: 0;
     pointer-events: none;
 }
@@ -383,7 +377,6 @@ body.ui-idle .mobile-toggle {
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
-    transition: opacity 1.1s ease, background 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s, box-shadow 0.3s, transform 0.3s;
     box-shadow:
         0 10px 26px rgba(0, 0, 0, 0.5),
         inset 0 1px 0 var(--glass-edge-hi),
