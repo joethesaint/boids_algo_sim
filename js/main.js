@@ -282,7 +282,7 @@ class Predator {
     update(boids, params, dt) {
         const step = dt * 60;
         if (this.huntCooldown > 0) this.huntCooldown -= step;
-        let target = null, maxPriorityDistSq = -1;
+        let target = null, maxPriorityDistSq = -1, targetDistSq = Infinity;
         const huntRadiusSq = params.predators.huntRadius * params.predators.huntRadius;
 
         for (let i = 0; i < boids.length; i++) {
@@ -293,14 +293,14 @@ class Predator {
                 // Priority: Large Fish > Bird > Small Fish
                 const priority = (b.type === BOID_TYPES.LARGE_FISH ? 3.0 : (b.type === BOID_TYPES.BIRD ? 2.0 : 1.0));
                 const score = priority / (Math.sqrt(dSq) + 1);
-                if (score > maxPriorityDistSq) { target = b; maxPriorityDistSq = score; }
+                if (score > maxPriorityDistSq) { target = b; maxPriorityDistSq = score; targetDistSq = dSq; }
             }
         }
         const acc = _v4.set(0, 0, 0);
         let caught = null;
         if (target && this.huntCooldown <= 0) {
             acc.subVectors(target.position, this.position).normalize().multiplyScalar(this.maxSpeed).sub(this.velocity).clampLength(0, 0.6);
-            if (minDistSq < 49) { this.huntCooldown = 180; caught = target; }
+            if (targetDistSq < 49) { this.huntCooldown = 180; caught = target; }
         } else {
             acc.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(0.2);
         }
@@ -346,6 +346,16 @@ class Simulation {
             audio: { enabled: false, sensitivity: 1.0 },
             features: { trails: true, food: true, predators: true, followMouse: true, layering: true, wrapSpace: false }
         };
+        this.isMobile = this.detectMobile();
+        if (this.isMobile) {
+            // Leaner defaults so mid-range phones hold a stable framerate.
+            this.params.count = 120;
+            this.params.predators.count = 2;
+            this.params.food.count = 8;
+            this.params.performance.fpsLimit = 30;
+            this.params.features.trails = false;
+        }
+
         this.boids = []; this.predators = []; this.foodSources = []; this.obstacles = []; this.instancedMeshes = {};
         this.pointLights = [];
         this.envMeshes = { edges: null, grid: null };
@@ -356,24 +366,34 @@ class Simulation {
         this.init();
     }
 
+    detectMobile() {
+        const coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        const narrowScreen = Math.min(window.innerWidth, window.innerHeight) <= 820;
+        const uaMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+        return uaMobile || (coarsePointer && narrowScreen);
+    }
+
     init() {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x020205);
         this.scene.fog = new THREE.Fog(0x020205, 200, 1500);
         this.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 10000);
         this.camera.position.set(0, 150, 400);
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        this.renderer = new THREE.WebGLRenderer({ antialias: !this.isMobile, powerPreference: "high-performance" });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.isMobile ? 1.5 : 2));
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         document.body.appendChild(this.renderer.domElement);
         this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
+        // OrbitControls already defaults touches to {ONE: ROTATE, TWO: DOLLY_PAN}; kept explicit for clarity.
+        this.controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 
         try {
             this.composer = new THREE.EffectComposer(this.renderer);
             this.composer.addPass(new THREE.RenderPass(this.scene, this.camera));
-            this.bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.8, 0.4, 0.85);
+            const bloomScale = this.isMobile ? 0.6 : 1;
+            this.bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth * bloomScale, window.innerHeight * bloomScale), 1.8, 0.4, 0.85);
             this.composer.addPass(this.bloomPass);
 
             // Cinematic Vignette Pass
@@ -391,14 +411,20 @@ class Simulation {
         this.createBoids(this.params.count);
         this.createPredators(this.params.predators.count);
         this.createFoodSources(this.params.food.count);
-        this.createObstacles(6);
+        this.createObstacles(this.isMobile ? 3 : 6);
         this.setupUI();
-        window.addEventListener('resize', () => {
+
+        const handleResize = () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             if (this.composer) this.composer.setSize(window.innerWidth, window.innerHeight);
-        });
+        };
+        window.addEventListener('resize', handleResize);
+        // 'resize' can fire before iOS/Android finish rotating the layout; re-check shortly after.
+        window.addEventListener('orientationchange', () => setTimeout(handleResize, 300));
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', handleResize);
+
         this.animate();
     }
 
@@ -457,7 +483,7 @@ class Simulation {
         grid.position.y = -b; this.scene.add(grid);
 
         // Marine Snow Particle System
-        const snowCount = 2000;
+        const snowCount = this.isMobile ? 700 : 2000;
         const snowGeo = new THREE.BufferGeometry();
         const snowPos = new Float32Array(snowCount * 3);
         for(let i=0; i<snowCount * 3; i++) {
@@ -553,6 +579,16 @@ class Simulation {
         }
     }
 
+    applyMobileDefaults() {
+        if (!this.isMobile) return;
+        const fpsSlider = document.getElementById('fps-limit');
+        if (fpsSlider) fpsSlider.value = this.params.performance.fpsLimit;
+        const fpsLabel = document.getElementById('fps-limit-value');
+        if (fpsLabel) fpsLabel.textContent = this.params.performance.fpsLimit;
+        const trailsToggle = document.getElementById('toggle-trails');
+        if (trailsToggle) trailsToggle.checked = this.params.features.trails;
+    }
+
     setupUI() {
         const bind = (id, param, obj) => {
             const el = document.getElementById(id); if (!el) return;
@@ -625,10 +661,49 @@ class Simulation {
         };
         window.toggleSection = (h) => { const c = h.nextElementSibling; const a = h.querySelector('.arrow'); c.classList.toggle('collapsed'); a.textContent = c.classList.contains('collapsed') ? '▼' : '▲'; };
 
-        window.addEventListener('mousemove', (e) => {
+        // Mobile drawer toggles: panels slide in on demand instead of always
+        // occupying screen space, since two 280px-wide panels don't fit a phone.
+        const leftPanel = document.getElementById('left-panel');
+        const rightPanel = document.getElementById('right-panel');
+        const backdrop = document.getElementById('mobile-backdrop');
+        const toggleLeftBtn = document.getElementById('toggle-left-panel');
+        const toggleRightBtn = document.getElementById('toggle-right-panel');
+        const closeMobilePanels = () => {
+            leftPanel.classList.remove('open');
+            rightPanel.classList.remove('open');
+            backdrop.classList.remove('visible');
+            setTimeout(() => { if (!backdrop.classList.contains('visible')) backdrop.style.display = 'none'; }, 300);
+        };
+        const openMobilePanel = (panel) => {
+            leftPanel.classList.remove('open');
+            rightPanel.classList.remove('open');
+            panel.classList.add('open');
+            backdrop.style.display = 'block';
+            requestAnimationFrame(() => backdrop.classList.add('visible'));
+        };
+        if (toggleLeftBtn) toggleLeftBtn.onclick = () => {
+            leftPanel.classList.contains('open') ? closeMobilePanels() : openMobilePanel(leftPanel);
+        };
+        if (toggleRightBtn) toggleRightBtn.onclick = () => {
+            rightPanel.classList.contains('open') ? closeMobilePanels() : openMobilePanel(rightPanel);
+        };
+        if (backdrop) backdrop.onclick = closeMobilePanels;
+
+        this.applyMobileDefaults();
+
+        // The "Boids Simulation" title fades out once, 5s after load, leaving
+        // a clean view of the simulation. Panels are unaffected by this.
+        setTimeout(() => {
+            const title = document.getElementById('title');
+            if (title) title.classList.add('faded');
+        }, 5000);
+
+        // Pointer Events unify mouse, touch and pen — this drives both the "Mouse
+        // Interaction" boid steering and the click/tap shockwave on mobile.
+        window.addEventListener('pointermove', (e) => {
             this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-        });
+        }, { passive: true });
 
         window.addEventListener('keydown', (e) => {
             if (e.key.toLowerCase() === 'h') {
@@ -636,7 +711,10 @@ class Simulation {
                 const title = document.getElementById('title');
                 const isHidden = panels[0].style.display === 'none';
                 panels.forEach(p => p.style.display = isHidden ? 'flex' : 'none');
-                if (title) title.style.display = isHidden ? 'block' : 'none';
+                if (title) {
+                    title.style.display = isHidden ? 'block' : 'none';
+                    if (isHidden) title.classList.remove('faded'); // manual show overrides the 5s auto-fade
+                }
             }
         });
 

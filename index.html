@@ -3,7 +3,11 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#020205">
     <title>Boids | Cinematic Flocking Simulation</title>
     <link rel="stylesheet" href="style.css">
 
@@ -26,6 +30,10 @@
 <body>
     <div id="title">Boids Simulation</div>
 
+    <button id="toggle-left-panel" class="mobile-toggle" aria-label="Toggle controls">☰</button>
+    <button id="toggle-right-panel" class="mobile-toggle" aria-label="Toggle ecosystem panel">🌊</button>
+    <div id="mobile-backdrop"></div>
+
     <div id="left-panel" class="panel-container">
         <div id="info" class="glass-panel">
             <strong>Simulation Data</strong>
@@ -39,11 +47,11 @@
 
         <div id="controls" class="glass-panel">
             <div class="control-section">
-                <div class="control-header" onclick="toggleSection(this)">
+                <div class="control-header collapsed" onclick="toggleSection(this)">
                     <span>⚡ Performance</span>
                     <span class="arrow">▼</span>
                 </div>
-                <div class="control-content">
+                <div class="control-content collapsed">
                     <div class="slider-container">
                         <div class="slider-label"><span>Sim Speed</span><span id="sim-speed-value">1.0</span></div>
                         <input type="range" id="sim-speed" min="0.1" max="3" step="0.1" value="1.0">
@@ -56,11 +64,11 @@
             </div>
 
             <div class="control-section">
-                <div class="control-header" onclick="toggleSection(this)">
+                <div class="control-header collapsed" onclick="toggleSection(this)">
                     <span>🎮 Simulation</span>
                     <span class="arrow">▼</span>
                 </div>
-                <div class="control-content">
+                <div class="control-content collapsed">
                     <button id="pauseResume">Pause</button>
                     <button id="reset">Reset Simulation</button>
                     <button id="fps-view">Follow Boid</button>
@@ -68,11 +76,11 @@
             </div>
 
             <div class="control-section">
-                <div class="control-header" onclick="toggleSection(this)">
+                <div class="control-header collapsed" onclick="toggleSection(this)">
                     <span>🐟 Flocking Rules</span>
                     <span class="arrow">▼</span>
                 </div>
-                <div class="control-content">
+                <div class="control-content collapsed">
                     <div class="slider-container">
                         <div class="slider-label"><span>Separation</span><span id="separation-value">2.0</span></div>
                         <input type="range" id="separation" min="0" max="5" step="0.1" value="2.0">
@@ -139,11 +147,11 @@
 
             <!-- Features Section -->
             <div class="control-section">
-                <div class="control-header" onclick="toggleSection(this)">
+                <div class="control-header collapsed" onclick="toggleSection(this)">
                     <span>⚙️ Features</span>
                     <span class="arrow">▼</span>
                 </div>
-                <div class="control-content">
+                <div class="control-content collapsed">
                     <label class="toggle-row"><input type="checkbox" id="toggle-mouse" checked> <span>Mouse Interaction</span></label>
                     <label class="toggle-row"><input type="checkbox" id="toggle-layering" checked> <span>Ecosystem Layering</span></label>
                     <label class="toggle-row"><input type="checkbox" id="toggle-wrapping"> <span>Infinite Wrapping</span></label>
@@ -158,11 +166,11 @@
 
             <!-- Audio Reactivity Section -->
             <div class="control-section" style="margin-bottom: 0;">
-                <div class="control-header" onclick="toggleSection(this)">
+                <div class="control-header collapsed" onclick="toggleSection(this)">
                     <span>🎵 Audio Reactivity</span>
                     <span class="arrow">▼</span>
                 </div>
-                <div class="control-content">
+                <div class="control-content collapsed">
                     <button id="enable-audio">Enable Microphone</button>
                     <div class="slider-container" style="margin-top: 10px;">
                         <div class="slider-label"><span>Sensitivity</span><span id="audio-sensitivity-value">1.0</span>
