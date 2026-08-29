@@ -341,10 +341,10 @@ class Simulation {
             speed: { min: 1.0, max: 5.0 },
             forces: { separation: 2.0, alignment: 1.4, cohesion: 1.1 },
             perception: { separation: 16 },
-            lighting: { ambient: 0.6, bloom: 1.8, pointLight: 5.0, vignette: 1.0 },
+            lighting: { ambient: 0.6, bloom: 1.8, pointLight: 5.0 },
             performance: { simSpeed: 1.0, fpsLimit: 60 },
             audio: { enabled: false, sensitivity: 1.0 },
-            features: { trails: true, food: true, predators: true, followMouse: true, layering: true, wrapSpace: false }
+            features: { trails: true, food: true, predators: true, followMouse: true, layering: true, wrapSpace: false, lightMode: false }
         };
         this.isMobile = this.detectMobile();
         if (this.isMobile) {
@@ -395,14 +395,7 @@ class Simulation {
             const bloomScale = this.isMobile ? 0.6 : 1;
             this.bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth * bloomScale, window.innerHeight * bloomScale), 1.8, 0.4, 0.85);
             this.composer.addPass(this.bloomPass);
-
-            // Cinematic Vignette Pass
-            this.vignettePass = new THREE.ShaderPass({
-                uniforms: { tDiffuse: { value: null }, offset: { value: 1.0 }, darkness: { value: this.params.lighting.vignette } },
-                vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-                fragmentShader: `uniform sampler2D tDiffuse; uniform float offset; uniform float darkness; varying vec2 vUv; void main() { vec4 texel = texture2D(tDiffuse, vUv); vec2 uv = (vUv - 0.5) * 2.0; float vig = smoothstep(offset, offset - darkness, length(uv)); gl_FragColor = vec4(texel.rgb * vig, texel.a); }`
-            });
-            this.composer.addPass(this.vignettePass);
+            // Vignette pass removed — darkened edges were hiding the scene.
         } catch (e) { console.error("Composer Error", e); }
 
         this.setupLighting();
@@ -477,9 +470,15 @@ class Simulation {
         if (this.envMeshes.snow) this.scene.remove(this.envMeshes.snow);
         
         const b = this.params.bounds;
-        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(b * 2, b * 2, b * 2)), new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.2 }));
+        const isLight = this.params.features.lightMode;
+        // Dark-mode grid/edges are light lines on a near-black scene; light
+        // mode flips to darker slate lines on the pale background instead.
+        const edgeColor = isLight ? 0x94a3b8 : 0x334155;
+        const gridColorA = isLight ? 0xcbd5e1 : 0x1e293b;
+        const gridColorB = isLight ? 0xe2e8f0 : 0x0f172a;
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(b * 2, b * 2, b * 2)), new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: isLight ? 0.35 : 0.2 }));
         this.scene.add(edges);
-        const grid = new THREE.GridHelper(b * 2, 12, 0x1e293b, 0x0f172a);
+        const grid = new THREE.GridHelper(b * 2, 12, gridColorA, gridColorB);
         grid.position.y = -b; this.scene.add(grid);
 
         // Marine Snow Particle System
@@ -579,6 +578,18 @@ class Simulation {
         }
     }
 
+    applyTheme() {
+        const isLight = this.params.features.lightMode;
+        document.body.classList.toggle('light-mode', isLight);
+        const bgColor = isLight ? 0xeef3f8 : 0x020205;
+        this.scene.background.set(bgColor);
+        if (this.scene.fog) this.scene.fog.color.set(bgColor);
+        // Bloom glow reads as haze rather than glow against a bright
+        // background, so tone it down (not off) in light mode.
+        if (this.bloomPass) this.bloomPass.strength = this.params.lighting.bloom * (isLight ? 0.6 : 1);
+        this.setupEnvironment();
+    }
+
     applyMobileDefaults() {
         if (!this.isMobile) return;
         const fpsSlider = document.getElementById('fps-limit');
@@ -602,9 +613,6 @@ class Simulation {
                     this.pointLights[0].intensity = val;
                     this.pointLights[1].intensity = val * 0.7;
                 }
-                if (id === 'vignette' && this.vignettePass) {
-                    this.vignettePass.uniforms.darkness.value = val;
-                }
                 if (id === 'bounds') {
                     this.params.bounds = val;
                     this.setupEnvironment();
@@ -617,15 +625,18 @@ class Simulation {
         bind('bloom', 'bloom', this.params.lighting);
         bind('ambient', 'ambient', this.params.lighting);
         bind('point-light', 'pointLight', this.params.lighting);
-        bind('vignette', 'vignette', this.params.lighting);
         bind('bounds', 'bounds', this.params);
         bind('sim-speed', 'simSpeed', this.params.performance);
         bind('fps-limit', 'fpsLimit', this.params.performance);
         bind('audio-sensitivity', 'sensitivity', this.params.audio);
         const bindToggle = (id, param) => {
             const el = document.getElementById(id); if (!el) return;
-            el.addEventListener('change', (e) => { this.params.features[param] = e.target.checked; });
+            el.addEventListener('change', (e) => {
+                this.params.features[param] = e.target.checked;
+                if (id === 'toggle-theme') this.applyTheme();
+            });
         };
+        bindToggle('toggle-theme', 'lightMode');
         bindToggle('toggle-mouse', 'followMouse');
         bindToggle('toggle-layering', 'layering');
         bindToggle('toggle-wrapping', 'wrapSpace');
@@ -688,6 +699,28 @@ class Simulation {
             rightPanel.classList.contains('open') ? closeMobilePanels() : openMobilePanel(rightPanel);
         };
         if (backdrop) backdrop.onclick = closeMobilePanels;
+
+        // Play shortcut: opens the controls panel and jumps straight to the
+        // Flocking Rules section (expanding it if it's collapsed).
+        const flockingBtn = document.getElementById('shortcut-flocking');
+        const flockingSection = document.getElementById('flocking-rules-section');
+        // Matches the CSS drawer breakpoint — only slide the drawer in /
+        // dim the backdrop when that layout is actually active, otherwise
+        // the desktop view (where panels are always visible) would get an
+        // unwanted full-screen backdrop.
+        const isMobileLayout = () => window.matchMedia('(max-width: 768px), (pointer: coarse) and (max-width: 1024px)').matches;
+        if (flockingBtn && flockingSection) {
+            flockingBtn.onclick = () => {
+                if (isMobileLayout()) openMobilePanel(leftPanel);
+                const header = flockingSection.querySelector('.control-header');
+                const content = flockingSection.querySelector('.control-content');
+                const arrow = header.querySelector('.arrow');
+                header.classList.remove('collapsed');
+                content.classList.remove('collapsed');
+                if (arrow) arrow.textContent = '▲';
+                header.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            };
+        }
 
         this.applyMobileDefaults();
 
