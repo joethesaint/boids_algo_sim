@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
 
 :root {
-    --bg-dark: rgba(8, 12, 20, 0.24);
+    --bg-dark: rgba(8, 12, 20, 0.14);
     --accent: #00d2ff;
     --accent-glow: rgba(0, 210, 255, 0.3);
     --border: rgba(255, 255, 255, 0.1);
@@ -9,15 +9,14 @@
     --danger: #ff4d4d;
     --success: #00ff88;
 
-    /* Liquid glass system — clear, not frosted: a whisper of blur just to
-       soften what's behind it, relying on edge highlights + a glint streak
-       (rather than heavy blur) to read as glass. */
-    --glass-sheen: rgba(255, 255, 255, 0.38);
-    --glass-edge-hi: rgba(255, 255, 255, 0.6);
-    --glass-edge-lo: rgba(0, 0, 0, 0.25);
-    --glass-border: rgba(255, 255, 255, 0.28);
-    --glass-blur: blur(3px) saturate(150%) brightness(1.05);
-    --glass-text-shadow: 0 1px 5px rgba(0, 0, 0, 0.7), 0 1px 1px rgba(0, 0, 0, 0.5);
+    /* Liquid glass system — clear and transparent: flat, near-uncolored
+       tints (no gradient washes) with a thin 1px edge highlight to read as
+       a glass surface, and just enough blur to keep text legible. */
+    --glass-edge-hi: rgba(255, 255, 255, 0.55);
+    --glass-edge-lo: rgba(0, 0, 0, 0.2);
+    --glass-border: rgba(255, 255, 255, 0.22);
+    --glass-blur: blur(2px) saturate(120%);
+    --glass-text-shadow: 0 1px 5px rgba(0, 0, 0, 0.75), 0 1px 1px rgba(0, 0, 0, 0.5);
 }
 
 html, body {
@@ -68,24 +67,19 @@ canvas {
 }
 
 .glass-panel {
-    /* Clear liquid glass: minimal blur so the simulation stays visible
-       through it; a soft top-left sheen and a thin diagonal glint stand in
-       for real refraction, with inset edges reading as a curved rim. */
-    background:
-        radial-gradient(130% 90% at 18% -12%, var(--glass-sheen), rgba(255, 255, 255, 0) 55%),
-        linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.16) 45%, rgba(255, 255, 255, 0.28) 50%, rgba(255, 255, 255, 0.16) 55%, transparent 68%),
-        var(--bg-dark);
+    /* Clear liquid glass: a flat, near-transparent tint (no gradient wash)
+       so the simulation reads clearly through it; thin 1px edge lines
+       (not a fill) stand in for a curved glass rim catching light. */
+    background: var(--bg-dark);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
     border-radius: 22px;
     box-shadow:
-        0 24px 48px -12px rgba(0, 0, 0, 0.5),
-        0 2px 10px rgba(0, 0, 0, 0.25),
+        0 24px 48px -12px rgba(0, 0, 0, 0.45),
+        0 2px 10px rgba(0, 0, 0, 0.2),
         inset 0 1px 0 var(--glass-edge-hi),
-        inset 0 -1px 0 var(--glass-edge-lo),
-        inset 1px 0 0 rgba(255, 255, 255, 0.14),
-        inset -1px 0 0 rgba(0, 0, 0, 0.15);
+        inset 0 -1px 0 var(--glass-edge-lo);
     pointer-events: auto;
     width: 100%;
     box-sizing: border-box;
@@ -125,7 +119,7 @@ canvas {
     margin-bottom: 14px;
     border-radius: 16px;
     overflow: hidden;
-    background: linear-gradient(155deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
+    background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
@@ -141,12 +135,12 @@ canvas {
     text-transform: uppercase;
     letter-spacing: 1.2px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+    background: rgba(255, 255, 255, 0.05);
     color: var(--accent);
 }
 
 .control-header:hover {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04));
+    background: rgba(255, 255, 255, 0.1);
     color: #fff;
 }
 
@@ -185,7 +179,7 @@ canvas {
 input[type="range"] {
     width: 100%;
     height: 5px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.14));
+    background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 6px;
     appearance: none;
@@ -245,11 +239,11 @@ input[type="range"]::-moz-range-thumb {
     cursor: pointer;
 }
 
-/* Buttons: glass "capsules" with a diagonal sheen that sweeps on hover */
+/* Buttons: clear glass capsules with a diagonal sheen that sweeps on hover */
 button {
-    background: linear-gradient(155deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 60%, rgba(255, 255, 255, 0.09) 100%);
-    backdrop-filter: blur(3px) saturate(140%);
-    -webkit-backdrop-filter: blur(3px) saturate(140%);
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(2px) saturate(120%);
+    -webkit-backdrop-filter: blur(2px) saturate(120%);
     color: #fff;
     border: 1px solid rgba(255, 255, 255, 0.18);
     padding: 12px;
@@ -290,7 +284,7 @@ button:hover::after {
 }
 
 button:hover {
-    background: linear-gradient(155deg, rgba(0, 210, 255, 0.55) 0%, rgba(0, 210, 255, 0.22) 100%);
+    background: rgba(0, 210, 255, 0.35);
     border-color: rgba(0, 210, 255, 0.6);
     box-shadow:
         0 8px 22px var(--accent-glow),
@@ -316,7 +310,7 @@ button:active {
 }
 
 #fps-view.active {
-    background: linear-gradient(155deg, rgba(0, 255, 136, 0.55), rgba(0, 255, 136, 0.22));
+    background: rgba(0, 255, 136, 0.35);
     color: #00190d;
     border-color: var(--success);
     box-shadow: 0 8px 22px rgba(0, 255, 136, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.6);
@@ -371,9 +365,7 @@ strong {
     line-height: 1;
     align-items: center;
     justify-content: center;
-    background:
-        radial-gradient(120% 120% at 25% 15%, var(--glass-sheen), rgba(255, 255, 255, 0) 55%),
-        linear-gradient(155deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
+    background: rgba(255, 255, 255, 0.1);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
