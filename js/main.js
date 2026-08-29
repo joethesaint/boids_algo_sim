@@ -689,6 +689,28 @@ class Simulation {
         };
         if (backdrop) backdrop.onclick = closeMobilePanels;
 
+        // Play shortcut: opens the controls panel and jumps straight to the
+        // Flocking Rules section (expanding it if it's collapsed).
+        const flockingBtn = document.getElementById('shortcut-flocking');
+        const flockingSection = document.getElementById('flocking-rules-section');
+        // Matches the CSS drawer breakpoint — only slide the drawer in /
+        // dim the backdrop when that layout is actually active, otherwise
+        // the desktop view (where panels are always visible) would get an
+        // unwanted full-screen backdrop.
+        const isMobileLayout = () => window.matchMedia('(max-width: 768px), (pointer: coarse) and (max-width: 1024px)').matches;
+        if (flockingBtn && flockingSection) {
+            flockingBtn.onclick = () => {
+                if (isMobileLayout()) openMobilePanel(leftPanel);
+                const header = flockingSection.querySelector('.control-header');
+                const content = flockingSection.querySelector('.control-content');
+                const arrow = header.querySelector('.arrow');
+                header.classList.remove('collapsed');
+                content.classList.remove('collapsed');
+                if (arrow) arrow.textContent = '▲';
+                header.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            };
+        }
+
         this.applyMobileDefaults();
 
         // The "Boids Simulation" title fades out once, 5s after load, leaving

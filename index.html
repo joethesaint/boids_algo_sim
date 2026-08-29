@@ -30,8 +30,9 @@
 <body>
     <div id="title">Boids Simulation</div>
 
-    <button id="toggle-left-panel" class="mobile-toggle" aria-label="Toggle controls">☰</button>
-    <button id="toggle-right-panel" class="mobile-toggle" aria-label="Toggle ecosystem panel">🌊</button>
+    <button id="toggle-left-panel" class="glass-fab mobile-toggle" aria-label="Toggle controls">☰</button>
+    <button id="toggle-right-panel" class="glass-fab mobile-toggle" aria-label="Toggle ecosystem panel">🌊</button>
+    <button id="shortcut-flocking" class="glass-fab fab-play" aria-label="Jump to Flocking Rules">▶</button>
     <div id="mobile-backdrop"></div>
 
     <div id="left-panel" class="panel-container">
@@ -75,7 +76,7 @@
                 </div>
             </div>
 
-            <div class="control-section">
+            <div class="control-section" id="flocking-rules-section">
                 <div class="control-header collapsed" onclick="toggleSection(this)">
                     <span>🐟 Flocking Rules</span>
                     <span class="arrow">▼</span>

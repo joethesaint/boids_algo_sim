@@ -103,7 +103,7 @@ canvas {
 
 /* No backdrop-filter support: fall back to a more opaque glass so text stays legible */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .glass-panel, .mobile-toggle {
+    .glass-panel, .glass-fab {
         background-color: rgba(8, 12, 20, 0.92);
     }
 }
@@ -364,21 +364,15 @@ strong {
     pointer-events: none;
 }
 
-/* Mobile drawer toggles + backdrop (hidden on desktop) */
-.mobile-toggle {
-    display: none;
-    position: fixed;
-    top: max(16px, env(safe-area-inset-top));
-    width: 46px;
-    height: 46px;
-    padding: 0;
-    margin: 0;
-    z-index: 30;
-    border-radius: 50%;
-    font-size: 18px;
-    line-height: 1;
+/* Shared round liquid-glass button: menu toggles + the play shortcut */
+.glass-fab {
+    display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
+    margin: 0;
+    line-height: 1;
+    border-radius: 50%;
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
@@ -389,8 +383,36 @@ strong {
         inset 0 -1px 0 var(--glass-edge-lo);
 }
 
+/* Mobile drawer toggles (hidden on desktop). Sized comfortably above the
+   44px minimum touch target (Apple HIG / Material) for a min-width phone
+   experience — bigger, easier-to-hit targets over strict minimums. */
+.mobile-toggle {
+    display: none;
+    position: fixed;
+    top: max(16px, env(safe-area-inset-top));
+    width: 54px;
+    height: 54px;
+    z-index: 30;
+    font-size: 20px;
+}
+
 #toggle-left-panel { left: max(16px, env(safe-area-inset-left)); }
 #toggle-right-panel { right: max(16px, env(safe-area-inset-right)); }
+
+/* Play shortcut -> jumps straight to Flocking Rules (see main.js). Always
+   visible, bottom-right, on both desktop and mobile; sized as a primary FAB. */
+.fab-play {
+    position: fixed;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    right: max(20px, env(safe-area-inset-right));
+    width: 60px;
+    height: 60px;
+    font-size: 22px;
+    color: var(--accent);
+    z-index: 25;
+    /* nudge the triangle glyph so it looks visually centered */
+    padding-left: 3px;
+}
 
 #mobile-backdrop {
     display: none;
@@ -491,5 +513,8 @@ strong {
     }
 
     #title { font-size: 14px; top: max(8px, env(safe-area-inset-top)); }
-    .mobile-toggle { width: 40px; height: 40px; top: max(8px, env(safe-area-inset-top)); }
+    /* Never drop below the ~44px minimum recommended touch target, even
+       when squeezed for vertical space in landscape. */
+    .mobile-toggle { width: 48px; height: 48px; font-size: 18px; top: max(8px, env(safe-area-inset-top)); }
+    .fab-play { width: 52px; height: 52px; font-size: 19px; bottom: max(10px, env(safe-area-inset-bottom)); }
 }
