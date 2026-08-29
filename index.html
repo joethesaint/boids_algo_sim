@@ -3,7 +3,11 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#020205">
     <title>Boids | Cinematic Flocking Simulation</title>
     <link rel="stylesheet" href="style.css">
 
@@ -25,6 +29,10 @@
 
 <body>
     <div id="title">Boids Simulation</div>
+
+    <button id="toggle-left-panel" class="mobile-toggle" aria-label="Toggle controls">☰</button>
+    <button id="toggle-right-panel" class="mobile-toggle" aria-label="Toggle ecosystem panel">🌊</button>
+    <div id="mobile-backdrop"></div>
 
     <div id="left-panel" class="panel-container">
         <div id="info" class="glass-panel">

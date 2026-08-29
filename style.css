@@ -10,17 +10,22 @@
     --success: #00ff88;
 }
 
-body {
+html, body {
     margin: 0;
     overflow: hidden;
     background-color: #020205;
     font-family: 'Outfit', sans-serif;
     color: var(--text);
     user-select: none;
+    height: 100%;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-text-size-adjust: 100%;
 }
 
 canvas {
     display: block;
+    touch-action: none;
 }
 
 /* UI Containers */
@@ -257,4 +262,128 @@ strong {
 /* Transitions */
 * {
     transition: background-color 0.3s, color 0.3s, border-color 0.3s, opacity 0.3s;
+}
+
+/* Mobile drawer toggles + backdrop (hidden on desktop) */
+.mobile-toggle {
+    display: none;
+    position: fixed;
+    top: max(16px, env(safe-area-inset-top));
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    margin: 0;
+    z-index: 30;
+    border-radius: 50%;
+    font-size: 18px;
+    line-height: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+#toggle-left-panel { left: max(16px, env(safe-area-inset-left)); }
+#toggle-right-panel { right: max(16px, env(safe-area-inset-right)); }
+
+#mobile-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 15;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+#mobile-backdrop.visible {
+    opacity: 1;
+}
+
+/* ---------------- Mobile Layout ---------------- */
+@media (max-width: 768px), (pointer: coarse) and (max-width: 1024px) {
+    .mobile-toggle {
+        display: flex;
+    }
+
+    #title {
+        top: max(14px, env(safe-area-inset-top));
+        font-size: 18px;
+        letter-spacing: 2px;
+    }
+
+    .panel-container {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        width: min(85vw, 320px);
+        gap: 12px;
+        padding: max(76px, calc(env(safe-area-inset-top) + 70px)) 14px 14px 14px;
+        z-index: 20;
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        box-sizing: border-box;
+    }
+
+    #left-panel {
+        left: 0;
+        transform: translateX(-105%);
+    }
+
+    #left-panel.open {
+        transform: translateX(0);
+    }
+
+    #right-panel {
+        right: 0;
+        padding-bottom: max(14px, env(safe-area-inset-bottom));
+        transform: translateX(105%);
+    }
+
+    #right-panel.open {
+        transform: translateX(0);
+    }
+
+    /* Bigger touch targets */
+    input[type="range"] {
+        height: 6px;
+        margin: 14px 0;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+        width: 22px;
+        height: 22px;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+        width: 22px;
+        height: 22px;
+        background: #fff;
+        border: 2px solid var(--accent);
+        border-radius: 50%;
+        cursor: pointer;
+    }
+
+    button, .control-header, .toggle-row {
+        min-height: 44px;
+    }
+
+    .toggle-row input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+    }
+}
+
+/* Very small phones: trim further */
+@media (max-width: 380px) {
+    #title { font-size: 15px; letter-spacing: 1px; }
+    .panel-container { width: 88vw; }
+}
+
+/* Landscape phones: panels get slimmer so the canvas stays visible */
+@media (max-width: 900px) and (orientation: landscape) {
+    .panel-container {
+        width: min(65vw, 300px);
+        padding-top: max(64px, calc(env(safe-area-inset-top) + 56px));
+    }
+
+    #title { font-size: 14px; top: max(8px, env(safe-area-inset-top)); }
+    .mobile-toggle { width: 40px; height: 40px; top: max(8px, env(safe-area-inset-top)); }
 }
