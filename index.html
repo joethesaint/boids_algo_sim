@@ -10,6 +10,7 @@
     <meta name="theme-color" content="#020205">
     <title>Boids | Cinematic Flocking Simulation</title>
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
 
     <!-- Base Three.js -->
     <script src="https://unpkg.com/three@0.132.2/build/three.min.js"></script>
@@ -30,9 +31,9 @@
 <body>
     <div id="title">Boids Simulation</div>
 
-    <button id="toggle-left-panel" class="glass-fab mobile-toggle" aria-label="Toggle controls">☰</button>
-    <button id="toggle-right-panel" class="glass-fab mobile-toggle" aria-label="Toggle ecosystem panel">🌊</button>
-    <button id="shortcut-flocking" class="glass-fab fab-play" aria-label="Jump to Flocking Rules">▶</button>
+    <button id="toggle-left-panel" class="glass-fab mobile-toggle" aria-label="Toggle controls"><span class="material-symbols-outlined">menu</span></button>
+    <button id="toggle-right-panel" class="glass-fab mobile-toggle" aria-label="Toggle ecosystem panel"><span class="material-symbols-outlined">eco</span></button>
+    <button id="shortcut-flocking" class="glass-fab fab-play" aria-label="Jump to Flocking Rules"><span class="material-symbols-outlined">play_arrow</span></button>
     <div id="mobile-backdrop"></div>
 
     <div id="left-panel" class="panel-container">
@@ -49,8 +50,8 @@
         <div id="controls" class="glass-panel">
             <div class="control-section">
                 <div class="control-header collapsed" onclick="toggleSection(this)">
-                    <span>⚡ Performance</span>
-                    <span class="arrow">▼</span>
+                    <span><span class="material-symbols-outlined icon-inline">bolt</span> Performance</span>
+                    <span class="arrow material-symbols-outlined">expand_more</span>
                 </div>
                 <div class="control-content collapsed">
                     <div class="slider-container">
@@ -66,8 +67,8 @@
 
             <div class="control-section">
                 <div class="control-header collapsed" onclick="toggleSection(this)">
-                    <span>🎮 Simulation</span>
-                    <span class="arrow">▼</span>
+                    <span><span class="material-symbols-outlined icon-inline">sports_esports</span> Simulation</span>
+                    <span class="arrow material-symbols-outlined">expand_more</span>
                 </div>
                 <div class="control-content collapsed">
                     <button id="pauseResume">Pause</button>
@@ -78,8 +79,8 @@
 
             <div class="control-section" id="flocking-rules-section">
                 <div class="control-header collapsed" onclick="toggleSection(this)">
-                    <span>🐟 Flocking Rules</span>
-                    <span class="arrow">▼</span>
+                    <span><span class="material-symbols-outlined icon-inline">scatter_plot</span> Flocking Rules</span>
+                    <span class="arrow material-symbols-outlined">expand_more</span>
                 </div>
                 <div class="control-content collapsed">
                     <div class="slider-container">
@@ -104,8 +105,8 @@
             <!-- Ecosystem Section -->
             <div class="control-section">
                 <div class="control-header collapsed" onclick="toggleSection(this)">
-                    <span>🌊 Ecosystem</span>
-                    <span class="arrow">▼</span>
+                    <span><span class="material-symbols-outlined icon-inline">eco</span> Ecosystem</span>
+                    <span class="arrow material-symbols-outlined">expand_more</span>
                 </div>
                 <div class="control-content collapsed">
                     <div class="slider-container">
@@ -144,8 +145,8 @@
             <!-- Features Section -->
             <div class="control-section">
                 <div class="control-header collapsed" onclick="toggleSection(this)">
-                    <span>⚙️ Features</span>
-                    <span class="arrow">▼</span>
+                    <span><span class="material-symbols-outlined icon-inline">settings</span> Features</span>
+                    <span class="arrow material-symbols-outlined">expand_more</span>
                 </div>
                 <div class="control-content collapsed">
                     <label class="toggle-row"><input type="checkbox" id="toggle-theme"> <span>Light Mode</span></label>
@@ -164,8 +165,8 @@
             <!-- Audio Reactivity Section -->
             <div class="control-section" style="margin-bottom: 0;">
                 <div class="control-header collapsed" onclick="toggleSection(this)">
-                    <span>🎵 Audio Reactivity</span>
-                    <span class="arrow">▼</span>
+                    <span><span class="material-symbols-outlined icon-inline">mic</span> Audio Reactivity</span>
+                    <span class="arrow material-symbols-outlined">expand_more</span>
                 </div>
                 <div class="control-content collapsed">
                     <button id="enable-audio">Enable Microphone</button>

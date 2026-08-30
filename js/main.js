@@ -141,6 +141,11 @@ class Boid {
         this.maxForce = type.maxForce;
         this.active = true;
         this.trail = scene ? new Trail(scene, type.color, 20) : null;
+        if (this.trail && params.features.lightMode) {
+            this.trail.material.blending = THREE.NormalBlending;
+            const c = new THREE.Color(type.color).lerp(new THREE.Color(0x000000), 0.5);
+            this.trail.material.uniforms.color.value.copy(c);
+        }
     }
 
     applyRules(neighbors, predators, foodSources, obstacles, params, mouse3D) {
@@ -373,9 +378,33 @@ class Simulation {
         return uaMobile || (coarsePointer && narrowScreen);
     }
 
+    // A flat fill reads as a stark, clinical wall of color — especially the
+    // pale gray of light mode, which ACESFilmicToneMapping crushes toward a
+    // dull mid-gray if set as a plain scene.background color. A big inverted
+    // sphere with a per-vertex gradient (and toneMapped:false, so it renders
+    // its true colors untouched) gives the scene a real "sky" in both themes.
+    createSkyDome(topColor, bottomColor) {
+        const radius = 6000;
+        const geo = new THREE.SphereGeometry(radius, 24, 16);
+        const top = new THREE.Color(topColor), bottom = new THREE.Color(bottomColor);
+        const pos = geo.attributes.position;
+        const colors = new Float32Array(pos.count * 3);
+        for (let i = 0; i < pos.count; i++) {
+            const t = THREE.MathUtils.clamp(pos.getY(i) / radius * 0.5 + 0.5, 0, 1);
+            const c = bottom.clone().lerp(top, t);
+            colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+        }
+        geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        const mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.renderOrder = -1000;
+        return mesh;
+    }
+
     init() {
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x020205);
+        this.skyDome = this.createSkyDome('#0a0f1c', '#020205');
+        this.scene.add(this.skyDome);
         this.scene.fog = new THREE.Fog(0x020205, 200, 1500);
         this.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 10000);
         this.camera.position.set(0, 150, 400);
@@ -386,6 +415,11 @@ class Simulation {
         document.body.appendChild(this.renderer.domElement);
         this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
+        
+        // Disable right-click panning so the browser context menu can appear
+        this.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: null };
+        this.renderer.domElement.addEventListener('contextmenu', e => e.stopPropagation(), true);
+
         // OrbitControls already defaults touches to {ONE: ROTATE, TWO: DOLLY_PAN}; kept explicit for clarity.
         this.controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 
@@ -489,7 +523,11 @@ class Simulation {
             snowPos[i] = (Math.random() - 0.5) * (b * 2.5);
         }
         snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
-        const snowMat = new THREE.PointsMaterial({ color: 0x88ccff, size: 0.5, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending });
+        // Additive blending washes light-blue specks out to near-invisible
+        // against a pale background, so light mode gets a darker slate tone
+        // with normal blending instead (mirrors the trail/boid treatment above).
+        const snowColor = isLight ? 0x64748b : 0x88ccff;
+        const snowMat = new THREE.PointsMaterial({ color: snowColor, size: 0.5, transparent: true, opacity: isLight ? 0.5 : 0.4, blending: isLight ? THREE.NormalBlending : THREE.AdditiveBlending });
         const snow = new THREE.Points(snowGeo, snowMat);
         this.scene.add(snow);
 
@@ -555,13 +593,20 @@ class Simulation {
         this.predators.forEach(p => this.scene.remove(p.mesh)); this.predators = [];
         for (let i = 0; i < count; i++) {
             const p = new Predator(new THREE.Vector3((Math.random() - 0.5) * 400, (Math.random() - 0.5) * 400, (Math.random() - 0.5) * 400), this.params);
+            if (this.params.features.lightMode) {
+                p.mesh.material.emissive.setHex(0x000000);
+                p.mesh.material.color.copy(new THREE.Color(0xff3333).lerp(new THREE.Color(0x000000), 0.3));
+            }
             this.scene.add(p.mesh); this.predators.push(p);
         }
     }
 
     createFoodSources(count) {
         const geo = new THREE.SphereGeometry(1.5, 8, 8);
-        const mat = new THREE.MeshPhongMaterial({ color: 0x32cd32, emissive: 0x32cd32, emissiveIntensity: 0.8 });
+        const isLight = this.params.features.lightMode;
+        const color = isLight ? new THREE.Color(0x32cd32).lerp(new THREE.Color(0x000000), 0.3).getHex() : 0x32cd32;
+        const emissive = isLight ? 0x000000 : 0x32cd32;
+        const mat = new THREE.MeshPhongMaterial({ color: color, emissive: emissive, emissiveIntensity: 0.8 });
         for (let i = 0; i < count; i++) {
             const m = new THREE.Mesh(geo, mat); m.position.set((Math.random() - 0.5) * 300, (Math.random() - 0.5) * 300, (Math.random() - 0.5) * 300);
             this.scene.add(m); this.foodSources.push({ mesh: m, position: m.position });
@@ -581,12 +626,75 @@ class Simulation {
     applyTheme() {
         const isLight = this.params.features.lightMode;
         document.body.classList.toggle('light-mode', isLight);
-        const bgColor = isLight ? 0xeef3f8 : 0x020205;
-        this.scene.background.set(bgColor);
+        // Light mode gets a muted warm-gray gradient rather than a bright
+        // sky-blue/white one, which still read as a stark, unfriendly wall
+        // of white. Dark mode keeps its near-black gradient.
+        if (this.skyDome) { this.scene.remove(this.skyDome); this.skyDome.geometry.dispose(); this.skyDome.material.dispose(); }
+        this.skyDome = isLight
+            ? this.createSkyDome('#c9c3b6', '#e4dfd3')
+            : this.createSkyDome('#0a0f1c', '#020205');
+        this.scene.add(this.skyDome);
+        const bgColor = isLight ? 0xe4dfd3 : 0x020205;
         if (this.scene.fog) this.scene.fog.color.set(bgColor);
-        // Bloom glow reads as haze rather than glow against a bright
-        // background, so tone it down (not off) in light mode.
-        if (this.bloomPass) this.bloomPass.strength = this.params.lighting.bloom * (isLight ? 0.6 : 1);
+
+        if (this.bloomPass) {
+            this.bloomPass.strength = this.params.lighting.bloom * (isLight ? 0.6 : 1);
+            this.bloomPass.threshold = isLight ? 1.0 : 0.85;
+        }
+        
+        // Adjust Boid Colors & Emissive for Contrast
+        Object.values(BOID_TYPES).forEach(t => {
+            if (this.instancedMeshes[t.name]) {
+                const mat = this.instancedMeshes[t.name].material;
+                if (isLight) {
+                    mat.emissive.setHex(0x000000);
+                    const c = new THREE.Color(t.color).lerp(new THREE.Color(0x000000), 0.4);
+                    mat.color.copy(c);
+                } else {
+                    mat.emissive.setHex(t.color);
+                    mat.color.setHex(t.color);
+                }
+                mat.needsUpdate = true;
+            }
+        });
+
+        // Adjust Predators & Food
+        this.predators.forEach(p => {
+            if (isLight) {
+                p.mesh.material.emissive.setHex(0x000000);
+                p.mesh.material.color.copy(new THREE.Color(0xff3333).lerp(new THREE.Color(0x000000), 0.3));
+            } else {
+                p.mesh.material.emissive.setHex(0xff0000);
+                p.mesh.material.color.setHex(0xff3333);
+            }
+            p.mesh.material.needsUpdate = true;
+        });
+        
+        this.foodSources.forEach(f => {
+            if (isLight) {
+                f.mesh.material.emissive.setHex(0x000000);
+                f.mesh.material.color.copy(new THREE.Color(0x32cd32).lerp(new THREE.Color(0x000000), 0.3));
+            } else {
+                f.mesh.material.emissive.setHex(0x32cd32);
+                f.mesh.material.color.setHex(0x32cd32);
+            }
+            f.mesh.material.needsUpdate = true;
+        });
+
+        // Trails (Additive blending disappears on white background)
+        this.boids.forEach(b => {
+            if (b.trail) {
+                b.trail.material.blending = isLight ? THREE.NormalBlending : THREE.AdditiveBlending;
+                if (isLight) {
+                    const c = new THREE.Color(b.type.color).lerp(new THREE.Color(0x000000), 0.5);
+                    b.trail.material.uniforms.color.value.copy(c);
+                } else {
+                    b.trail.material.uniforms.color.value.setHex(b.type.color);
+                }
+                b.trail.material.needsUpdate = true;
+            }
+        });
+
         this.setupEnvironment();
     }
 
@@ -603,11 +711,19 @@ class Simulation {
     setupUI() {
         const bind = (id, param, obj) => {
             const el = document.getElementById(id); if (!el) return;
+            // Sync initial state from DOM
+            const initialVal = parseFloat(el.value);
+            obj[param] = (id.includes('fish') || id === 'birds') ? initialVal / 100 : initialVal;
+            const initVEl = document.getElementById(id + '-value'); if (initVEl) initVEl.textContent = initialVal;
+
             el.addEventListener('input', (e) => {
                 const val = parseFloat(e.target.value);
                 obj[param] = (id.includes('fish') || id === 'birds') ? val / 100 : val;
                 const vEl = document.getElementById(id + '-value'); if (vEl) vEl.textContent = val;
-                if (id === 'bloom' && this.bloomPass) this.bloomPass.strength = val;
+                if (id === 'bloom' && this.bloomPass) {
+                    const isLight = this.params.features.lightMode;
+                    this.bloomPass.strength = val * (isLight ? 0.6 : 1);
+                }
                 if (id === 'ambient') this.scene.children.filter(c => c.type === 'AmbientLight').forEach(l => l.intensity = val);
                 if (id === 'point-light' && this.pointLights.length) {
                     this.pointLights[0].intensity = val;
@@ -631,6 +747,8 @@ class Simulation {
         bind('audio-sensitivity', 'sensitivity', this.params.audio);
         const bindToggle = (id, param) => {
             const el = document.getElementById(id); if (!el) return;
+            this.params.features[param] = el.checked;
+            if (id === 'toggle-theme' && el.checked) this.applyTheme();
             el.addEventListener('change', (e) => {
                 this.params.features[param] = e.target.checked;
                 if (id === 'toggle-theme') this.applyTheme();
@@ -670,7 +788,7 @@ class Simulation {
                 if (act.length) { this.followedBoid = act[Math.floor(Math.random() * act.length)]; e.target.classList.add('active'); e.target.textContent = "Stop Following"; this.controls.enabled = false; }
             }
         };
-        window.toggleSection = (h) => { const c = h.nextElementSibling; const a = h.querySelector('.arrow'); c.classList.toggle('collapsed'); a.textContent = c.classList.contains('collapsed') ? '▼' : '▲'; };
+        window.toggleSection = (h) => { const c = h.nextElementSibling; const a = h.querySelector('.arrow'); c.classList.toggle('collapsed'); h.classList.toggle('collapsed'); a.textContent = c.classList.contains('collapsed') ? 'expand_more' : 'expand_less'; };
 
         // Mobile drawer toggles: panels slide in on demand instead of always
         // occupying screen space, since two 280px-wide panels don't fit a phone.
@@ -795,12 +913,14 @@ class Simulation {
         let audioReact = 0;
         if (this.params.audio.enabled && this.analyser) {
             this.analyser.getByteFrequencyData(this.dataArray);
-            let sum = 0;
-            for (let i = 0; i < this.dataArray.length; i++) sum += this.dataArray[i];
-            const avg = sum / this.dataArray.length;
+            let avg = 0;
+            for (let i = 0; i < this.dataArray.length; i++) avg += this.dataArray[i];
+            avg /= this.dataArray.length;
             audioReact = (avg / 255.0) * this.params.audio.sensitivity;
             if (this.bloomPass) {
-                this.bloomPass.strength = THREE.MathUtils.lerp(this.bloomPass.strength, this.params.lighting.bloom + audioReact * 3.0, 0.1);
+                const isLight = this.params.features.lightMode;
+                const targetBloom = (this.params.lighting.bloom + audioReact * 3.0) * (isLight ? 0.6 : 1);
+                this.bloomPass.strength = THREE.MathUtils.lerp(this.bloomPass.strength, targetBloom, 0.1);
             }
         }
 
@@ -851,4 +971,11 @@ class Simulation {
     }
 }
 
-window.addEventListener('load', () => new Simulation());
+window.addEventListener('load', () => {
+    // Delay initialization slightly to ensure all stylesheets are applied and 
+    // the initial layout/paint is fully complete, preventing the browser from
+    // warning about forced synchronous layout.
+    setTimeout(() => {
+        window.__sim = new Simulation();
+    }, 50);
+});
