@@ -201,6 +201,8 @@ class Boid {
 
         const sepDistSq = params.perception.separation * params.perception.separation;
         const flockDistSq = 1225; // 35^2
+        const isSmallFish = this.type === BOID_TYPES.SMALL_FISH;
+        let fleeX = 0, fleeY = 0, fleeZ = 0, fC = 0;
 
         for (let i = 0; i < neighbors.length; i++) {
             const other = neighbors[i];
@@ -213,6 +215,14 @@ class Boid {
             if (dSq < flockDistSq) {
                 ali.add(other.velocity); aC++;
                 coh.add(other.position); cC++;
+            }
+            // Species Interaction: small fish avoid large fish. Folded into
+            // this same neighbor pass instead of a second full scan below.
+            if (isSmallFish && dSq < 1600 && other.type === BOID_TYPES.LARGE_FISH) {
+                fleeX += this.position.x - other.position.x;
+                fleeY += this.position.y - other.position.y;
+                fleeZ += this.position.z - other.position.z;
+                fC++;
             }
         }
 
@@ -229,17 +239,11 @@ class Boid {
             }
         }
 
-        // Species Interaction: Small fish avoid large fish
-        if (this.type === BOID_TYPES.SMALL_FISH) {
-            for (let i = 0; i < neighbors.length; i++) {
-                if (neighbors[i].type === BOID_TYPES.LARGE_FISH) {
-                    const dSq = this.position.distanceToSquared(neighbors[i].position);
-                    if (dSq < 1600) {
-                        const flee = _v4.subVectors(this.position, neighbors[i].position).normalize().multiplyScalar(this.maxSpeed * 1.5);
-                        this.acceleration.add(flee.sub(this.velocity).clampLength(0, this.maxForce * 2).multiplyScalar(1.2));
-                    }
-                }
-            }
+        // Species Interaction: Small fish avoid large fish (accumulated in
+        // the neighbor loop above instead of a second full scan here).
+        if (fC > 0) {
+            const flee = _v4.set(fleeX, fleeY, fleeZ).normalize().multiplyScalar(this.maxSpeed * 1.5);
+            this.acceleration.add(flee.sub(this.velocity).clampLength(0, this.maxForce * 2).multiplyScalar(1.2));
         }
 
         // Slight Wander for natural motion
@@ -333,14 +337,19 @@ class Predator {
         this.maxSpeed = params.predators.speed;
         this.huntCooldown = 0;
     }
-    update(boids, params, dt) {
+    update(grid, params, dt) {
         const step = dt * 60;
         if (this.huntCooldown > 0) this.huntCooldown -= step;
         let target = null, maxPriorityDistSq = -1, targetDistSq = Infinity;
-        const huntRadiusSq = params.predators.huntRadius * params.predators.huntRadius;
+        const huntRadius = params.predators.huntRadius;
+        const huntRadiusSq = huntRadius * huntRadius;
 
-        for (let i = 0; i < boids.length; i++) {
-            const b = boids[i];
+        // Query the same spatial grid the boids use instead of scanning
+        // every boid in the flock — keeps hunting cheap as boid counts scale
+        // into the thousands instead of costing O(N) per predator per frame.
+        const nearby = grid.getNearby(this.position, huntRadius);
+        for (let i = 0; i < nearby.length; i++) {
+            const b = nearby[i];
             if (!b.active) continue;
             const dSq = this.position.distanceToSquared(b.position);
             if (dSq < huntRadiusSq) {
@@ -770,20 +779,6 @@ class Simulation {
             f.mesh.material.needsUpdate = true;
         });
 
-        // Trails (Additive blending disappears on white background)
-        this.boids.forEach(b => {
-            if (b.trail) {
-                b.trail.material.blending = isLight ? THREE.NormalBlending : THREE.AdditiveBlending;
-                if (isLight) {
-                    const c = new THREE.Color(b.type.color).lerp(new THREE.Color(0x000000), 0.5);
-                    b.trail.material.uniforms.color.value.copy(c);
-                } else {
-                    b.trail.material.uniforms.color.value.setHex(b.type.color);
-                }
-                b.trail.material.needsUpdate = true;
-            }
-        });
-
         this.setupEnvironment();
     }
 
@@ -1044,7 +1039,7 @@ class Simulation {
             this.predators.forEach(p => {
                 p.mesh.visible = currentParams.features.predators;
                 if (currentParams.features.predators) {
-                    const caught = p.update(this.boids, currentParams, dt);
+                    const caught = p.update(this.grid, currentParams, dt);
                     if (caught) { caught.active = false; caught.destroy(); }
                 }
             });

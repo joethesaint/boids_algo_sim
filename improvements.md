@@ -16,6 +16,8 @@ The Boids Simulation has been refined into a high-performance, visually stunning
 *   **[DONE] Instanced Rendering:** Drastically reduced draw calls by batching boids of the same species into `InstancedMesh`. Now with **Slerp-based smooth rotation**.
 *   **[DONE] Zero-Allocation Engine:** Re-engineered the simulation loops to use global scratch vectors, eliminating Garbage Collection stutter and ensuring maximum smoothness.
 *   **[DONE] Advanced Ecosystem Logic:** Restored and refined the predator-prey dynamics, food source consumption, and obstacle avoidance. Added **Species-based avoidance** (small avoid large).
+*   **[DONE] Single-Pass Neighbor Rules:** Species avoidance (small fish fleeing large fish) used to re-scan every neighbor a second time per small-fish boid; it's now folded into the same pass that computes separation/alignment/cohesion, halving neighbor-loop work for roughly half the flock.
+*   **[DONE] Grid-Accelerated Predators:** Predators used to scan the *entire* boid array every frame to pick a hunt target (O(predators × N)). They now query the same spatial hash grid the flock uses, so hunting stays cheap as boid counts scale into the thousands via "Add Boids".
 
 ## 3. Future Directions
 
