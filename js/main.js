@@ -45,21 +45,46 @@ class SpatialHashGrid {
     }
 }
 
-// --- Optimized Trail with Ring Buffer ---
-class Trail {
-    constructor(scene, color, length = 20) {
-        this.scene = scene;
-        this.maxLength = length;
-        this.points = new Array(length).fill(null).map(() => new THREE.Vector3());
-        this.head = 0; // Ring buffer pointer
-        this.visible = true;
+// --- Batched Trail System ---
+// All trails of a given boid type share ONE LineSegments mesh (one draw call)
+// instead of one THREE.Line per boid. This is the single biggest win for
+// boid counts in the hundreds: 250 boids previously meant 250 draw calls
+// just for trails.
+class TrailSystem {
+    constructor(scene, color, maxTrails, trailLength = 20) {
+        this.maxTrails = maxTrails;
+        this.trailLength = trailLength;
+        this.segmentsPerTrail = trailLength - 1;
+        this.vertsPerTrail = this.segmentsPerTrail * 2;
 
+        // Ring-buffer state per trail slot
+        this.heads = new Uint16Array(maxTrails);
+        this.points = new Array(maxTrails);
+        for (let t = 0; t < maxTrails; t++) {
+            const arr = new Array(trailLength);
+            for (let i = 0; i < trailLength; i++) arr[i] = new THREE.Vector3();
+            this.points[t] = arr;
+        }
+
+        // Free-list of trail slot indices
+        this.freeIndices = [];
+        for (let i = maxTrails - 1; i >= 0; i--) this.freeIndices.push(i);
+
+        const totalVerts = maxTrails * this.vertsPerTrail;
         const geometry = new THREE.BufferGeometry();
-        this.positions = new Float32Array(this.maxLength * 3);
+        this.positions = new Float32Array(totalVerts * 3);
         geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
 
-        const alphas = new Float32Array(this.maxLength);
-        for (let i = 0; i < this.maxLength; i++) alphas[i] = 1.0 - (i / this.maxLength);
+        // Alpha only depends on a vertex's age-within-trail, which is the
+        // same pattern for every slot, so it's static (never re-uploaded).
+        const alphas = new Float32Array(totalVerts);
+        const pattern = new Float32Array(this.vertsPerTrail);
+        let vi = 0;
+        for (let s = 0; s < this.segmentsPerTrail; s++) {
+            pattern[vi++] = s / (trailLength - 1);
+            pattern[vi++] = (s + 1) / (trailLength - 1);
+        }
+        for (let t = 0; t < maxTrails; t++) alphas.set(pattern, t * this.vertsPerTrail);
         geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
 
         this.material = new THREE.ShaderMaterial({
@@ -84,34 +109,58 @@ class Trail {
             depthWrite: false
         });
 
-        this.line = new THREE.Line(geometry, this.material);
-        this.line.frustumCulled = false;
-        this.scene.add(this.line);
+        this.mesh = new THREE.LineSegments(geometry, this.material);
+        this.mesh.frustumCulled = false;
+        scene.add(this.mesh);
     }
 
-    update(position) {
-        if (!this.visible) { this.line.visible = false; return; }
-        this.line.visible = true;
+    allocate() {
+        if (this.freeIndices.length === 0) return -1;
+        return this.freeIndices.pop();
+    }
 
-        // Advance ring buffer
-        this.points[this.head].copy(position);
-        this.head = (this.head + 1) % this.maxLength;
+    release(index) {
+        if (index < 0) return;
+        this.collapse(index);
+        this.freeIndices.push(index);
+    }
 
-        const posAttr = this.line.geometry.attributes.position;
-        for (let i = 0; i < this.maxLength; i++) {
-            // Read back from head to show oldest to newest
-            const idx = (this.head - 1 - i + this.maxLength) % this.maxLength;
-            const p = this.points[idx];
-            this.positions[i * 3] = p.x;
-            this.positions[i * 3 + 1] = p.y;
-            this.positions[i * 3 + 2] = p.z;
+    // Collapse a slot's segments to zero length so it stops rendering
+    // without needing to touch draw range / index buffers.
+    collapse(index) {
+        const pts = this.points[index];
+        const last = pts[(this.heads[index] - 1 + this.trailLength) % this.trailLength];
+        for (let i = 0; i < this.trailLength; i++) pts[i].copy(last);
+        this._writeSegments(index);
+    }
+
+    update(index, position) {
+        const pts = this.points[index];
+        pts[this.heads[index]].copy(position);
+        this.heads[index] = (this.heads[index] + 1) % this.trailLength;
+        this._writeSegments(index);
+    }
+
+    _writeSegments(index) {
+        const pts = this.points[index];
+        const head = this.heads[index];
+        const base = index * this.vertsPerTrail * 3;
+        let vi = base;
+        for (let s = 0; s < this.segmentsPerTrail; s++) {
+            const a = pts[(head + s) % this.trailLength];
+            const b = pts[(head + s + 1) % this.trailLength];
+            this.positions[vi] = a.x; this.positions[vi + 1] = a.y; this.positions[vi + 2] = a.z; vi += 3;
+            this.positions[vi] = b.x; this.positions[vi + 1] = b.y; this.positions[vi + 2] = b.z; vi += 3;
         }
-        posAttr.needsUpdate = true;
+    }
+
+    commit() {
+        this.mesh.geometry.attributes.position.needsUpdate = true;
     }
 
     destroy() {
-        this.scene.remove(this.line);
-        this.line.geometry.dispose();
+        this.mesh.parent && this.mesh.parent.remove(this.mesh);
+        this.mesh.geometry.dispose();
         this.material.dispose();
     }
 }
@@ -130,7 +179,7 @@ function initScratch() {
 }
 
 class Boid {
-    constructor(type, position, params, scene) {
+    constructor(type, position, params, trailSystem) {
         initScratch();
         this.type = type;
         this.position = position.clone();
@@ -140,12 +189,8 @@ class Boid {
         this.maxSpeed = type.maxSpeed;
         this.maxForce = type.maxForce;
         this.active = true;
-        this.trail = scene ? new Trail(scene, type.color, 20) : null;
-        if (this.trail && params.features.lightMode) {
-            this.trail.material.blending = THREE.NormalBlending;
-            const c = new THREE.Color(type.color).lerp(new THREE.Color(0x000000), 0.5);
-            this.trail.material.uniforms.color.value.copy(c);
-        }
+        this.trailSystem = trailSystem || null;
+        this.trailIndex = trailSystem ? trailSystem.allocate() : -1;
     }
 
     applyRules(neighbors, predators, foodSources, obstacles, params, mouse3D) {
@@ -265,13 +310,17 @@ class Boid {
             if (this.position.z < -m) this.position.z = m; else if (this.position.z > m) this.position.z = -m;
         }
 
-        if (this.trail) {
-            this.trail.visible = params.features.trails;
-            this.trail.update(this.position);
+        if (this.trailSystem && this.trailIndex >= 0 && params.features.trails) {
+            this.trailSystem.update(this.trailIndex, this.position);
         }
     }
 
-    destroy() { if (this.trail) this.trail.destroy(); }
+    destroy() {
+        if (this.trailSystem && this.trailIndex >= 0) {
+            this.trailSystem.release(this.trailIndex);
+            this.trailIndex = -1;
+        }
+    }
 }
 
 class Predator {
@@ -304,6 +353,7 @@ class Predator {
         const acc = _v4.set(0, 0, 0);
         let caught = null;
         if (target && this.huntCooldown <= 0) {
+            const targetDistSq = this.position.distanceToSquared(target.position);
             acc.subVectors(target.position, this.position).normalize().multiplyScalar(this.maxSpeed).sub(this.velocity).clampLength(0, 0.6);
             if (targetDistSq < 49) { this.huntCooldown = 180; caught = target; }
         } else {
@@ -362,12 +412,23 @@ class Simulation {
         }
 
         this.boids = []; this.predators = []; this.foodSources = []; this.obstacles = []; this.instancedMeshes = {};
+        this.trailSystems = {};
         this.pointLights = [];
         this.envMeshes = { edges: null, grid: null };
-        this.grid = new SpatialHashGrid(30); this.clock = new THREE.Clock(); this.isPaused = false; this.followedBoid = null;
+        // Neighbor query radius must cover the largest radius checked against
+        // grid-sourced neighbors (species avoidance at 40). Cell size matches
+        // it so getNearby only has to scan a 3x3x3 block of cells instead of
+        // a much larger one.
+        this.neighborRadius = 40;
+        this.grid = new SpatialHashGrid(this.neighborRadius); this.clock = new THREE.Clock(); this.isPaused = false; this.followedBoid = null;
         this.lastFrameTime = 0;
         this.mouse3D = new THREE.Vector3(); this.raycaster = new THREE.Raycaster(); this.mouse = new THREE.Vector2();
+        this.mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
         this.audioContext = null; this.analyser = null; this.dataArray = null; this.audioSource = null;
+        // Reused each frame instead of a fresh `{ ...this.params }` spread,
+        // to avoid an allocation on every tick of the render loop.
+        this.frameParams = Object.assign({}, this.params, { speed: { min: 0, max: 0 } });
+        this.fpsEl = null; this.boidCountEl = null;
         this.init();
     }
 
@@ -435,11 +496,14 @@ class Simulation {
         this.setupLighting();
         this.setupEnvironment();
         this.initInstancedMeshes();
+        this.initTrailSystems();
         this.createBoids(this.params.count);
         this.createPredators(this.params.predators.count);
         this.createFoodSources(this.params.food.count);
         this.createObstacles(this.isMobile ? 3 : 6);
         this.setupUI();
+        this.fpsEl = document.getElementById('fps');
+        this.boidCountEl = document.getElementById('boidCount');
 
         const handleResize = () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -452,7 +516,10 @@ class Simulation {
         window.addEventListener('orientationchange', () => setTimeout(handleResize, 300));
         if (window.visualViewport) window.visualViewport.addEventListener('resize', handleResize);
 
-        this.animate();
+        // setAnimationLoop is the modern replacement for manually recursing
+        // requestAnimationFrame — same callback semantics, but it's the API
+        // three.js expects (e.g. required for WebXR sessions).
+        this.renderer.setAnimationLoop(() => this.animate());
     }
 
     async initAudio() {
@@ -580,12 +647,22 @@ class Simulation {
         for (let k in this.instancedMeshes) { this.instancedMeshes[k].count = counts[k]; this.instancedMeshes[k].instanceMatrix.needsUpdate = true; }
     }
 
+    initTrailSystems() {
+        // Capacity per boid type; boids beyond this simply render without a
+        // trail rather than growing buffers at runtime.
+        const CAPACITY = 1000;
+        [BOID_TYPES.SMALL_FISH, BOID_TYPES.LARGE_FISH, BOID_TYPES.BIRD].forEach(t => {
+            this.trailSystems[t.name] = new TrailSystem(this.scene, t.color, CAPACITY, 20);
+        });
+    }
+
     createBoids(count) {
         const r = [this.params.boidTypes.smallFishRatio, this.params.boidTypes.largeFishRatio];
         for (let i = 0; i < count; i++) {
             const rand = Math.random();
             const type = rand < r[0] ? BOID_TYPES.SMALL_FISH : (rand < r[0] + r[1] ? BOID_TYPES.LARGE_FISH : BOID_TYPES.BIRD);
-            this.boids.push(new Boid(type, new THREE.Vector3((Math.random() - 0.5) * 280, (Math.random() - 0.5) * 280, (Math.random() - 0.5) * 280), this.params, this.scene));
+            const trailSystem = this.trailSystems[type.name];
+            this.boids.push(new Boid(type, new THREE.Vector3((Math.random() - 0.5) * 280, (Math.random() - 0.5) * 280, (Math.random() - 0.5) * 280), this.params, trailSystem));
         }
     }
 
@@ -653,6 +730,18 @@ class Simulation {
                 } else {
                     mat.emissive.setHex(t.color);
                     mat.color.setHex(t.color);
+                }
+                mat.needsUpdate = true;
+            }
+            if (this.trailSystems && this.trailSystems[t.name]) {
+                const mat = this.trailSystems[t.name].material;
+                if (isLight) {
+                    mat.blending = THREE.NormalBlending;
+                    const c = new THREE.Color(t.color).lerp(new THREE.Color(0x000000), 0.5);
+                    mat.uniforms.color.value.copy(c);
+                } else {
+                    mat.blending = THREE.AdditiveBlending;
+                    mat.uniforms.color.value.setHex(t.color);
                 }
                 mat.needsUpdate = true;
             }
@@ -894,8 +983,7 @@ class Simulation {
     }
 
     animate() {
-        requestAnimationFrame(() => this.animate());
-        
+
         const now = performance.now();
         const frameDuration = 1000 / this.params.performance.fpsLimit;
         const delta = now - this.lastFrameTime;
@@ -907,8 +995,7 @@ class Simulation {
 
         // Update Mouse 3D Position
         this.raycaster.setFromCamera(this.mouse, this.camera);
-        const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-        this.raycaster.ray.intersectPlane(plane, this.mouse3D);
+        this.raycaster.ray.intersectPlane(this.mousePlane, this.mouse3D);
 
         let audioReact = 0;
         if (this.params.audio.enabled && this.analyser) {
@@ -924,13 +1011,17 @@ class Simulation {
             }
         }
 
-        const currentParams = {
-            ...this.params,
-            speed: {
-                min: (this.params.speed.min + audioReact * 2.0) * this.params.performance.simSpeed,
-                max: (this.params.speed.max + audioReact * 6.0) * this.params.performance.simSpeed
-            }
-        };
+        // Reused object: refresh top-level fields from params (shallow, same
+        // as the old spread) and overwrite speed in place — no per-frame
+        // object allocation in the hot path. The speed sub-object is kept
+        // as our own buffer (not this.params.speed) so mutating it here
+        // never corrupts the UI-bound base params.
+        const speedBuf = this.frameParams.speed;
+        Object.assign(this.frameParams, this.params);
+        this.frameParams.speed = speedBuf;
+        speedBuf.min = (this.params.speed.min + audioReact * 2.0) * this.params.performance.simSpeed;
+        speedBuf.max = (this.params.speed.max + audioReact * 6.0) * this.params.performance.simSpeed;
+        const currentParams = this.frameParams;
 
         // Animate Marine Snow
         if (this.envMeshes.snow) {
@@ -938,14 +1029,17 @@ class Simulation {
             this.envMeshes.snow.rotation.x += dt * 0.02;
         }
 
+        for (const k in this.trailSystems) this.trailSystems[k].mesh.visible = currentParams.features.trails;
+
         if (!this.isPaused) {
             this.grid.clear(); for (let i = 0; i < this.boids.length; i++) if (this.boids[i].active) this.grid.add(this.boids[i]);
             for (let i = 0; i < this.boids.length; i++) {
                 const b = this.boids[i]; if (!b.active) continue;
-                const res = b.applyRules(this.grid.getNearby(b.position, 45), this.predators, this.foodSources, this.obstacles, currentParams, this.mouse3D);
+                const res = b.applyRules(this.grid.getNearby(b.position, this.neighborRadius), this.predators, this.foodSources, this.obstacles, currentParams, this.mouse3D);
                 if (res && res.consume) { const idx = this.foodSources.indexOf(res.consume); if (idx !== -1) { this.scene.remove(res.consume.mesh); this.foodSources.splice(idx, 1); } }
                 b.update(currentParams, dt);
             }
+            if (currentParams.features.trails) for (const k in this.trailSystems) this.trailSystems[k].commit();
             this.updateInstancedMeshes();
             this.predators.forEach(p => {
                 p.mesh.visible = currentParams.features.predators;
@@ -964,8 +1058,12 @@ class Simulation {
             this.camera.position.lerp(_v3.copy(this.followedBoid.position).add(off), 0.1);
             this.camera.lookAt(this.followedBoid.position);
         } else if (this.followedBoid) { this.followedBoid = null; this.controls.enabled = true; document.getElementById('fps-view').classList.remove('active'); document.getElementById('fps-view').textContent = "Follow Boid"; }
-        document.getElementById('fps').textContent = Math.round(1 / (dt / this.params.performance.simSpeed || 0.01));
-        document.getElementById('boidCount').textContent = this.boids.filter(b => b.active).length;
+        if (this.fpsEl) this.fpsEl.textContent = Math.round(1 / (dt / this.params.performance.simSpeed || 0.01));
+        if (this.boidCountEl) {
+            let activeCount = 0;
+            for (let i = 0; i < this.boids.length; i++) if (this.boids[i].active) activeCount++;
+            this.boidCountEl.textContent = activeCount;
+        }
         this.controls.update();
         if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
     }
