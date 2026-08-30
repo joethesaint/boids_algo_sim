@@ -576,39 +576,50 @@ class Simulation {
 
     setupEnvironment() {
         if (this.envMeshes.edges) this.scene.remove(this.envMeshes.edges);
-        if (this.envMeshes.grid) this.scene.remove(this.envMeshes.grid);
-        if (this.envMeshes.snow) this.scene.remove(this.envMeshes.snow);
-        
+        if (this.envMeshes.grid)  this.scene.remove(this.envMeshes.grid);
+        if (this.envMeshes.snow)  this.scene.remove(this.envMeshes.snow);
+
         const b = this.params.bounds;
         const isLight = this.params.features.lightMode;
-        // Dark-mode grid/edges are light lines on a near-black scene; light
-        // mode flips to darker slate lines on the pale background instead.
-        const edgeColor = isLight ? 0x94a3b8 : 0x334155;
-        const gridColorA = isLight ? 0xcbd5e1 : 0x1e293b;
-        const gridColorB = isLight ? 0xe2e8f0 : 0x0f172a;
-        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(b * 2, b * 2, b * 2)), new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: isLight ? 0.35 : 0.2 }));
-        this.scene.add(edges);
-        const grid = new THREE.GridHelper(b * 2, 12, gridColorA, gridColorB);
-        grid.position.y = -b; this.scene.add(grid);
 
-        // Marine Snow Particle System
+        // Blueprint: bright cyan boundary lines + two-tone blueprint-blue grid.
+        // Dark mode keeps the existing slate palette.
+        const edgeColor  = isLight ? 0x7ec8ff : 0x334155;
+        const gridColorA = isLight ? 0x2a5a8a : 0x1e293b;
+        const gridColorB = isLight ? 0x163050 : 0x0f172a;
+        const edgeOpacity = isLight ? 0.6 : 0.2;
+
+        const edges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(b * 2, b * 2, b * 2)),
+            new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: edgeOpacity })
+        );
+        this.scene.add(edges);
+
+        const grid = new THREE.GridHelper(b * 2, 12, gridColorA, gridColorB);
+        grid.position.y = -b;
+        this.scene.add(grid);
+
+        // Marine snow / floating particles
         const snowCount = this.isMobile ? 700 : 2000;
         const snowGeo = new THREE.BufferGeometry();
         const snowPos = new Float32Array(snowCount * 3);
-        for(let i=0; i<snowCount * 3; i++) {
-            snowPos[i] = (Math.random() - 0.5) * (b * 2.5);
-        }
+        for (let i = 0; i < snowCount * 3; i++) snowPos[i] = (Math.random() - 0.5) * (b * 2.5);
         snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
-        // Additive blending washes light-blue specks out to near-invisible
-        // against a pale background, so light mode gets a darker slate tone
-        // with normal blending instead (mirrors the trail/boid treatment above).
-        const snowColor = isLight ? 0x64748b : 0x88ccff;
-        const snowMat = new THREE.PointsMaterial({ color: snowColor, size: 0.5, transparent: true, opacity: isLight ? 0.5 : 0.4, blending: isLight ? THREE.NormalBlending : THREE.AdditiveBlending });
+
+        // Blueprint: light-cyan additive particles (glow like dust on a lightboard).
+        const snowColor    = isLight ? 0xa0d8ff : 0x88ccff;
+        const snowOpacity  = isLight ? 0.35 : 0.4;
+        const snowBlending = THREE.AdditiveBlending; // additive in both modes
+        const snowMat = new THREE.PointsMaterial({
+            color: snowColor, size: 0.5, transparent: true,
+            opacity: snowOpacity, blending: snowBlending
+        });
         const snow = new THREE.Points(snowGeo, snowMat);
         this.scene.add(snow);
 
         this.envMeshes = { edges, grid, snow };
     }
+
 
     initInstancedMeshes() {
         const MAX = 5000;
@@ -712,42 +723,86 @@ class Simulation {
     applyTheme() {
         const isLight = this.params.features.lightMode;
         document.body.classList.toggle('light-mode', isLight);
-        // Light mode gets a muted warm-gray gradient rather than a bright
-        // sky-blue/white one, which still read as a stark, unfriendly wall
-        // of white. Dark mode keeps its near-black gradient.
+
+        // ── Sky dome ──────────────────────────────────────────────────────────
+        // Blueprint: deep navy paper look. Dark mode: near-black void.
         if (this.skyDome) { this.scene.remove(this.skyDome); this.skyDome.geometry.dispose(); this.skyDome.material.dispose(); }
         this.skyDome = isLight
-            ? this.createSkyDome('#c9c3b6', '#e4dfd3')
+            ? this.createSkyDome('#0d1b2a', '#091520')
             : this.createSkyDome('#0a0f1c', '#020205');
         this.scene.add(this.skyDome);
-        const bgColor = isLight ? 0xe4dfd3 : 0x020205;
+
+        const bgColor = isLight ? 0x091520 : 0x020205;
         if (this.scene.fog) this.scene.fog.color.set(bgColor);
 
+        // ── Bloom ─────────────────────────────────────────────────────────────
+        // Blueprint: reduced strength + high threshold — only very bright scene
+        // elements (grid lines, UI) get a halo; boids (zero emissive) won't bloom.
         if (this.bloomPass) {
-            this.bloomPass.strength = this.params.lighting.bloom * (isLight ? 0.6 : 1);
-            this.bloomPass.threshold = isLight ? 1.0 : 0.85;
+            this.bloomPass.strength  = this.params.lighting.bloom * (isLight ? 0.6 : 1);
+            this.bloomPass.threshold = isLight ? 0.95 : 0.82;
         }
-        
-        // Adjust Boid Colors & Emissive for Contrast
+
+        // ── Blueprint grid shader pass ────────────────────────────────────────
+        // Add in blueprint mode, remove in dark mode.
+        if (isLight) {
+            if (!this.blueprintPass) this.blueprintPass = this.createBlueprintPass();
+            if (this.composer && !this.composer.passes.includes(this.blueprintPass)) {
+                this.composer.addPass(this.blueprintPass);
+            }
+            if (this.blueprintPass) this.blueprintPass.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
+        } else {
+            if (this.blueprintPass && this.composer) {
+                const idx = this.composer.passes.indexOf(this.blueprintPass);
+                if (idx !== -1) this.composer.passes.splice(idx, 1);
+            }
+        }
+
+        // ── Lighting ──────────────────────────────────────────────────────────
+        // Blueprint: blue-tinted ambient (ref: 0x4060a0) + all-cyan point lights
+        // so the scene feels like a lit drafting table, not a disco.
+        // Dark mode restores white ambient + the original cyan/orange pair.
+        this.scene.children.filter(c => c.isAmbientLight).forEach(l => {
+            l.color.setHex(isLight ? 0x4060a0 : 0xffffff);
+        });
+        if (this.pointLights.length >= 2) {
+            this.pointLights[0].color.setHex(isLight ? 0x7dd3fc : 0x00d2ff);
+            this.pointLights[1].color.setHex(isLight ? 0x204878 : 0xff8c00);
+        }
+
+        // ── Boid rendering ────────────────────────────────────────────────────
+        // Blueprint: wireframe-only — no fill, border lines carry the type color.
+        //   Small Fish → sky-blue  #7dd3fc  (ref color)
+        //   Large Fish → mid-blue  #4fa8d8  (deeper = heavier)
+        //   Bird       → pale cyan #a5e0ff  (lighter = higher altitude)
+        // Zero emissive to prevent the "huddle glare" when many boids stack.
+        const blueprintPalette = {
+            'Small Fish': 0x7dd3fc,
+            'Large Fish': 0x4fa8d8,
+            'Bird':       0xa5e0ff
+        };
+
         Object.values(BOID_TYPES).forEach(t => {
             if (this.instancedMeshes[t.name]) {
                 const mat = this.instancedMeshes[t.name].material;
                 if (isLight) {
-                    mat.emissive.setHex(0x000000);
-                    const c = new THREE.Color(t.color).lerp(new THREE.Color(0x000000), 0.4);
-                    mat.color.copy(c);
+                    mat.wireframe        = true;
+                    mat.color.setHex(blueprintPalette[t.name] ?? 0x7dd3fc);
+                    mat.emissive.setHex(0x000000); // no emissive = no huddle glare
+                    mat.emissiveIntensity = 0;
                 } else {
-                    mat.emissive.setHex(t.color);
+                    mat.wireframe        = false;
                     mat.color.setHex(t.color);
+                    mat.emissive.setHex(t.color);
+                    mat.emissiveIntensity = t.glow;
                 }
                 mat.needsUpdate = true;
             }
             if (this.trailSystems && this.trailSystems[t.name]) {
                 const mat = this.trailSystems[t.name].material;
                 if (isLight) {
-                    mat.blending = THREE.NormalBlending;
-                    const c = new THREE.Color(t.color).lerp(new THREE.Color(0x000000), 0.5);
-                    mat.uniforms.color.value.copy(c);
+                    mat.blending = THREE.AdditiveBlending;
+                    mat.uniforms.color.value.setHex(blueprintPalette[t.name] ?? 0x7dd3fc);
                 } else {
                     mat.blending = THREE.AdditiveBlending;
                     mat.uniforms.color.value.setHex(t.color);
@@ -756,22 +811,29 @@ class Simulation {
             }
         });
 
-        // Adjust Predators & Food
+
+
+        // ── Predators ─────────────────────────────────────────────────────────
+        // Blueprint: keep red warning tone — reads as a "danger" annotation.
         this.predators.forEach(p => {
             if (isLight) {
-                p.mesh.material.emissive.setHex(0x000000);
-                p.mesh.material.color.copy(new THREE.Color(0xff3333).lerp(new THREE.Color(0x000000), 0.3));
+                p.mesh.material.color.setHex(0xff4444);
+                p.mesh.material.emissive.setHex(0xff2222);
+                p.mesh.material.emissiveIntensity = 0.7;
             } else {
                 p.mesh.material.emissive.setHex(0xff0000);
                 p.mesh.material.color.setHex(0xff3333);
             }
             p.mesh.material.needsUpdate = true;
         });
-        
+
+        // ── Food sources ──────────────────────────────────────────────────────
+        // Blueprint: bright amber/yellow — a "waypoint" marker on the schematic.
         this.foodSources.forEach(f => {
             if (isLight) {
-                f.mesh.material.emissive.setHex(0x000000);
-                f.mesh.material.color.copy(new THREE.Color(0x32cd32).lerp(new THREE.Color(0x000000), 0.3));
+                f.mesh.material.color.setHex(0xffe066);
+                f.mesh.material.emissive.setHex(0xffcc00);
+                f.mesh.material.emissiveIntensity = 0.6;
             } else {
                 f.mesh.material.emissive.setHex(0x32cd32);
                 f.mesh.material.color.setHex(0x32cd32);
@@ -781,6 +843,60 @@ class Simulation {
 
         this.setupEnvironment();
     }
+
+    // Full-screen post-processing pass that draws a two-scale graph-paper grid
+    // (major + minor lines) in blueprint cyan over the rendered frame, plus a
+    // vignette to give the edges a "paper darkens at corners" feel.
+    createBlueprintPass() {
+        const shader = {
+            uniforms: {
+                tDiffuse:   { value: null },
+                resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform vec2 resolution;
+                varying vec2 vUv;
+
+                void main() {
+                    vec4 color = texture2D(tDiffuse, vUv);
+
+                    // Screen-space pixel position
+                    vec2 px = vUv * resolution;
+
+                    // Major grid — every 56px
+                    vec2 maj = mod(px, 56.0);
+                    float majorLine = max(step(55.3, maj.x), step(55.3, maj.y));
+
+                    // Minor grid — every 14px (4 minor per major)
+                    vec2 mnr = mod(px, 14.0);
+                    float minorLine = max(step(13.4, mnr.x), step(13.4, mnr.y));
+                    minorLine *= (1.0 - majorLine); // hide minor where major sits
+
+                    // Blueprint cyan
+                    vec3 cyan = vec3(0.39, 0.71, 1.0);
+
+                    color.rgb = mix(color.rgb, cyan, majorLine * 0.22);
+                    color.rgb = mix(color.rgb, cyan, minorLine * 0.09);
+
+                    // Vignette — blueprint paper darkens at edges
+                    vec2 v = vUv - 0.5;
+                    float vignette = 1.0 - dot(v, v) * 2.2;
+                    vignette = pow(clamp(vignette, 0.0, 1.0), 0.55);
+                    color.rgb *= vignette;
+
+                    gl_FragColor = color;
+                }
+            `
+        };
+        return new THREE.ShaderPass(shader);
+    }
+
+
 
     applyMobileDefaults() {
         if (!this.isMobile) return;
@@ -792,7 +908,42 @@ class Simulation {
         if (trailsToggle) trailsToggle.checked = this.params.features.trails;
     }
 
+    // Persist all slider/toggle values to localStorage under one key.
+    saveSettings() {
+        const ids = [
+            'sim-speed', 'fps-limit', 'separation', 'alignment', 'cohesion',
+            'small-fish', 'large-fish', 'bloom', 'bounds', 'point-light', 'ambient',
+            'audio-sensitivity',
+            'toggle-theme', 'toggle-mouse', 'toggle-layering', 'toggle-wrapping',
+            'toggle-trails', 'toggle-food', 'toggle-predators'
+        ];
+        const out = {};
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            out[id] = el.type === 'checkbox' ? el.checked : el.value;
+        });
+        try { localStorage.setItem('boids_settings', JSON.stringify(out)); } catch (_) {}
+    }
+
+    // Restore saved values into DOM elements before bind() reads them.
+    loadSettings() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('boids_settings') || 'null');
+            if (!saved) return;
+            Object.entries(saved).forEach(([id, val]) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (el.type === 'checkbox') el.checked = val;
+                else el.value = val;
+            });
+        } catch (_) {}
+    }
+
     setupUI() {
+        // Restore any previously saved settings before bind() reads the DOM.
+        this.loadSettings();
+
         const bind = (id, param, obj) => {
             const el = document.getElementById(id); if (!el) return;
             // Sync initial state from DOM
@@ -845,6 +996,16 @@ class Simulation {
         bindToggle('toggle-trails', 'trails');
         bindToggle('toggle-food', 'food');
         bindToggle('toggle-predators', 'predators');
+
+        // Auto-save whenever any panel control changes — single delegated
+        // listener covers all sliders and toggles without touching bind().
+        ['left-panel', 'right-panel'].forEach(panelId => {
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+            panel.addEventListener('input',  () => this.saveSettings());
+            panel.addEventListener('change', () => this.saveSettings());
+        });
+
 
         const enableAudioBtn = document.getElementById('enable-audio');
         if (enableAudioBtn) {
@@ -902,26 +1063,53 @@ class Simulation {
         };
         if (backdrop) backdrop.onclick = closeMobilePanels;
 
-        // Play shortcut: opens the controls panel and jumps straight to the
-        // Flocking Rules section (expanding it if it's collapsed).
+        // Play FAB: toggles a compact flocking-controls popover anchored above
+        // the button. Popover sliders proxy to the canonical side-panel sliders
+        // so all simulation logic (bind()) fires exactly once.
         const flockingBtn = document.getElementById('shortcut-flocking');
-        const flockingSection = document.getElementById('flocking-rules-section');
-        // Matches the CSS drawer breakpoint — only slide the drawer in /
-        // dim the backdrop when that layout is actually active, otherwise
-        // the desktop view (where panels are always visible) would get an
-        // unwanted full-screen backdrop.
-        const isMobileLayout = () => window.matchMedia('(max-width: 768px), (pointer: coarse) and (max-width: 1024px)').matches;
-        if (flockingBtn && flockingSection) {
-            flockingBtn.onclick = () => {
-                if (isMobileLayout()) openMobilePanel(leftPanel);
-                const header = flockingSection.querySelector('.control-header');
-                const content = flockingSection.querySelector('.control-content');
-                const arrow = header.querySelector('.arrow');
-                header.classList.remove('collapsed');
-                content.classList.remove('collapsed');
-                if (arrow) arrow.textContent = '▲';
-                header.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            };
+        const popover     = document.getElementById('flocking-popover');
+
+        const popKeys = ['separation', 'alignment', 'cohesion'];
+
+        // Wire each popover slider → canonical slider (dispatch input event so
+        // bind() picks it up) and keep the canonical → popover mirror in sync.
+        popKeys.forEach(k => {
+            const canonical = document.getElementById(k);
+            const pop       = document.getElementById('pop-' + k);
+            const popVal    = document.getElementById('pop-' + k + '-value');
+            if (!canonical || !pop) return;
+
+            // popover → canonical
+            pop.addEventListener('input', e => {
+                canonical.value = e.target.value;
+                if (popVal) popVal.textContent = e.target.value;
+                canonical.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+
+            // canonical → popover (keeps both in sync when side panel is used)
+            canonical.addEventListener('input', e => {
+                pop.value = e.target.value;
+                if (popVal) popVal.textContent = e.target.value;
+            });
+        });
+
+        if (flockingBtn && popover) {
+            flockingBtn.addEventListener('click', () => {
+                const isOpen = popover.classList.toggle('open');
+                popover.setAttribute('aria-hidden', String(!isOpen));
+                // Sync latest canonical values into popover on open
+                if (isOpen) {
+                    popKeys.forEach(k => {
+                        const canonical = document.getElementById(k);
+                        const pop       = document.getElementById('pop-' + k);
+                        const popVal    = document.getElementById('pop-' + k + '-value');
+                        if (canonical && pop) {
+                            pop.value = canonical.value;
+                            if (popVal) popVal.textContent = canonical.value;
+                        }
+                    });
+                }
+            });
         }
 
         this.applyMobileDefaults();

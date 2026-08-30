@@ -27,30 +27,39 @@
     --glass-text-shadow: 0 1px 5px rgba(0, 0, 0, 0.75), 0 1px 1px rgba(0, 0, 0, 0.5);
 }
 
-/* Light Mode: same layout/glass system, flipped palette. Toggled via the
-   "Light Mode" checkbox (js: applyTheme()), which also recolors the 3D
-   scene background/fog/grid to match. */
+/* ── Blueprint Mode (toggled as "Light Mode") ──────────────────────────────
+   Technical schematic aesthetic: deep navy paper + cyan grid + glowing annotations.
+   Toggled via the "Light Mode" checkbox — also recolors the 3D scene. */
 body.light-mode {
-    /* Muted warm-gray gradient handled by the 3D scene background; this flat
-       fallback only shows briefly before the canvas paints. Kept deliberately
-       off-white/taupe rather than a stark white, which reads as glaring. */
-    --page-bg: linear-gradient(180deg, #c9c3b6 0%, #e4dfd3 100%);
-    --bg-dark: rgba(228, 223, 211, 0.55);
-    --accent: #0072d6;
-    --accent-rgb: 0, 114, 214;
-    --border: rgba(0, 0, 0, 0.1);
-    --text: #2b271f;
-    --tint-rgb: 15, 23, 42;
-    --glass-edge-hi: rgba(255, 255, 255, 0.7);
-    --glass-edge-lo: rgba(0, 0, 0, 0.12);
-    --glass-border: rgba(0, 0, 0, 0.14);
-    --glass-text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
+    /* Deep navy "blueprint paper" — shows briefly before canvas paints */
+    --page-bg: #0a1628;
+    --bg-dark: rgba(10, 22, 40, 0.75);
+    /* Blueprint cyan accent */
+    --accent: #7ec8ff;
+    --accent-rgb: 126, 200, 255;
+    --accent-glow: rgba(126, 200, 255, 0.35);
+    --border: rgba(126, 200, 255, 0.2);
+    /* Annotation text: light blue-white, brightest for hierarchy */
+    --text: #c8e8ff;
+    --tint-rgb: 100, 180, 255;
+    /* Glass edges: cyan catch-light top, deep shadow bottom */
+    --glass-edge-hi: rgba(160, 216, 255, 0.55);
+    --glass-edge-lo: rgba(0, 10, 40, 0.5);
+    --glass-border: rgba(126, 200, 255, 0.28);
+    --glass-blur: blur(16px) saturate(160%);
+    --glass-text-shadow: 0 0 10px rgba(126, 200, 255, 0.6), 0 1px 3px rgba(0, 0, 0, 0.8);
+    --success: #40d8a8;
+    --danger: #ff6060;
 }
 
 body.light-mode #title {
-    color: #2b271f;
-    text-shadow: 0 0 20px rgba(0, 114, 214, 0.25);
+    color: #a0d8ff;
+    text-shadow:
+        0 0 30px rgba(126, 200, 255, 0.7),
+        0 0 60px rgba(126, 200, 255, 0.3),
+        0 2px 6px rgba(0, 0, 0, 0.8);
 }
+
 
 html, body {
     margin: 0;
@@ -135,7 +144,7 @@ canvas {
 
 /* No backdrop-filter support: fall back to a more opaque glass so text stays legible */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .glass-panel, .glass-fab {
+    .glass-panel, .glass-fab, .flocking-popover {
         background-color: rgba(8, 12, 20, 0.92);
     }
 }
@@ -564,10 +573,16 @@ strong {
     align-items: center;
 }
 
-/* Light Mode Overrides for Glass */
-body.light-mode {
-    --glass-text-shadow: none;
-    --tint-rgb: 0, 0, 0;
+/* ── Blueprint Mode UI overrides ─────────────────────────────────────────── */
+/* Panels become dark-navy glass so they read as schematic annotations       */
+body.light-mode .glass-panel {
+    background: rgba(8, 18, 36, 0.72);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.6),
+        inset 0  1px 0 rgba(160, 216, 255, 0.3),
+        inset 0 -1px 0 rgba(0,  10,  40, 0.5);
 }
 
 body.light-mode .control-section {
@@ -576,29 +591,141 @@ body.light-mode .control-section {
     box-shadow: none;
 }
 
-body.light-mode .glass-panel {
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    box-shadow: none;
-}
-
 body.light-mode button {
-    border: none;
-    background: rgba(255, 255, 255, 0.4);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    color: #2b271f;
+    background: rgba(10, 30, 60, 0.55);
+    border: 1px solid rgba(126, 200, 255, 0.3);
+    box-shadow:
+        0 4px 14px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(160, 216, 255, 0.2);
+    color: #a0d8ff;
+    text-shadow: 0 0 8px rgba(126, 200, 255, 0.5);
 }
 
 body.light-mode button:hover {
-    background: rgba(255, 255, 255, 0.65);
-    color: #0072d6;
+    background: rgba(126, 200, 255, 0.15);
+    border-color: rgba(126, 200, 255, 0.65);
+    color: #e0f4ff;
+    box-shadow:
+        0 6px 20px rgba(126, 200, 255, 0.25),
+        inset 0 1px 0 rgba(160, 216, 255, 0.35);
 }
 
 body.light-mode .glass-fab {
-    border: none;
-    background: rgba(255, 255, 255, 0.3);
-    backdrop-filter: blur(1px) saturate(110%);
-    -webkit-backdrop-filter: blur(1px) saturate(110%);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+    background: rgba(10, 22, 50, 0.65);
+    border: 1px solid rgba(126, 200, 255, 0.35);
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    box-shadow:
+        0 8px 28px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(160, 216, 255, 0.35),
+        0 0 18px rgba(126, 200, 255, 0.12);
 }
+
+body.light-mode .control-header {
+    color: #7ec8ff;
+}
+
+body.light-mode .control-header:hover {
+    color: #c8e8ff;
+    background: rgba(126, 200, 255, 0.07);
+}
+
+
+
+/* ── Flocking Quick-Popover — Liquid Glass ───────────────────────────────── */
+/* Built on the shared --glass-* tokens (see :root / body.light-mode) so it
+   tracks the same clear/blueprint themes as .glass-fab and .glass-panel
+   instead of hand-rolling its own palette. */
+.flocking-popover {
+    position: fixed;
+    bottom: max(100px, calc(env(safe-area-inset-bottom) + 100px));
+    left: 50%;
+    width: min(320px, calc(100vw - 32px));
+    padding: 18px 20px 16px;
+    border-radius: 24px;
+    z-index: 26;
+
+    /* ── Glass core: clear tint + light blur so the simulation still reads
+       through it. Deliberately NOT var(--glass-blur) — that token goes to
+       blur(16px) in Blueprint/light mode for the full side panels' frosted-
+       paper look, which is too heavy for this small floating popover. */
+    background: rgba(var(--tint-rgb), 0.1);
+    backdrop-filter: blur(3px) saturate(140%);
+    -webkit-backdrop-filter: blur(3px) saturate(140%);
+
+    /* ── Edge system: 1px rim, inset highlights top/bottom/sides */
+    border: 1px solid var(--glass-border);
+    box-shadow:
+        /* depth */
+        0 28px 70px rgba(0, 0, 0, 0.55),
+        0 10px 28px rgba(0, 0, 0, 0.35),
+        /* top-edge catch-light */
+        inset 0  1px 0   var(--glass-edge-hi),
+        /* bottom-edge shadow */
+        inset 0 -1px 0   var(--glass-edge-lo),
+        /* side micro-highlights */
+        inset  1px 0 0   var(--glass-edge-hi),
+        inset -1px 0 0   var(--glass-edge-lo);
+
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+    text-shadow: var(--glass-text-shadow);
+
+    /* Stacking context so ::before sheen sits behind content */
+    isolation: isolate;
+
+    /* Hidden → springs up on open */
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(-50%) translateY(18px) scale(0.96);
+    transition:
+        opacity 0.24s ease,
+        transform 0.32s cubic-bezier(0.34, 1.45, 0.64, 1);
+    will-change: transform, opacity;
+}
+
+/* Diagonal highlight sheen — the "curved glass" illusion. Tinted off
+   --tint-rgb so it picks up the blueprint theme's cyan cast instead of
+   staying a flat white sheen in both themes. */
+.flocking-popover::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+        148deg,
+        rgba(var(--tint-rgb), 0.22)  0%,
+        rgba(var(--tint-rgb), 0.08) 30%,
+        transparent                 55%,
+        rgba(0,   0,   0,   0.06)  100%
+    );
+    pointer-events: none;
+    z-index: -1;
+}
+
+.flocking-popover.open {
+    pointer-events: auto;
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.pop-slider {
+    margin: 12px 0;
+}
+.pop-slider:first-child { margin-top: 2px; }
+.pop-slider:last-child  { margin-bottom: 2px; }
+
+/* Color/text-shadow inherit from .flocking-popover (var(--text) /
+   var(--glass-text-shadow)) — only the compact-popover sizing differs from
+   the canonical .slider-label. */
+.flocking-popover .slider-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+

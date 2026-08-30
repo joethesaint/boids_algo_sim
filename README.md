@@ -1,64 +1,108 @@
-# Boids Flocking Simulation
+# Boids — 3D Flocking Simulation
 
-An interactive 3D flocking simulation built with Three.js, implementing Craig Reynolds' boids algorithm with an added ecosystem layer including predators and food sources. This version is highly optimized for performance and visual fidelity.
+> Built to explore three questions: *How does complex group behaviour emerge from simple rules? What are the real performance limits of WebGL on mobile? And how do you design a UI that lives on top of a live 3D canvas without fighting it?*
 
-![Boids Simulation](https://img.shields.io/badge/Three.js-r132-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
+**Three.js r132 · Vanilla JS · No build step**
+
+---
+
+## What it is
+
+A real-time 3D flocking simulation — 250+ autonomous agents (boids) each following three local rules that produce globally emergent behaviour: murmuration, schooling, evasion. Built on Craig Reynolds' 1987 algorithm, extended with a full predator/prey ecosystem, two visual themes, audio reactivity, and a glassmorphism control panel.
+
+This is not a tutorial follow-along. Every system — the spatial index, the trail renderer, the post-processing pipeline, the UI — was designed and built from scratch.
+
+---
+
+## Why it's hard (the interesting parts)
+
+### 1. The N² problem
+Naively, checking every boid against every other boid is **O(N²)** — at 500 boids that's 250,000 comparisons per frame, per rule. Unacceptable at 60fps.
+
+**Solution:** A custom **Spatial Hash Grid** that maps 3D space into fixed-size cells. Each boid only queries its immediate neighbourhood — reducing lookups to roughly **O(1)** regardless of total count. The predator AI reuses the same grid rather than maintaining a separate structure.
+
+### 2. Draw call explosion
+Early version: one `THREE.Line` per boid trail = **250 draw calls** for trails alone. GPU stalls, frame drops.
+
+**Solution:** A **batched trail system** — all trails of a given species share a single `LineSegments` mesh backed by a ring-buffer. 250 draw calls → **1**. The entire flock renders in 3 draw calls total via `InstancedMesh`.
+
+### 3. Mobile performance
+Desktop WebGL and Android Chrome are very different environments. The same scene that runs at 120fps on desktop can drop to 15fps on a mid-range phone.
+
+**Solution:** Device detection at load, automatic budget tuning (boid count, FPS cap, trail system toggled off, bloom resolution halved). The simulation stays usable on a 2021 Android phone.
+
+### 4. UI on a live canvas
+A control panel that lives over a 3D scene has two failure modes: it obscures the content, or it gets lost in it. Most overlay UIs pick one failure.
+
+**Solution:** A **liquid glass** system — layered `backdrop-filter`, inset edge highlights, and a `::before` diagonal sheen that reads as floating glass at any zoom level, in both dark and blueprint themes. No CSS library. Every visual property is a CSS custom property so the entire theme is a single class toggle on `body`.
+
+### 5. Post-processing as a theme layer
+Blueprint mode needed a full-screen graph-paper grid. Adding it as geometry would be expensive and wouldn't sit at the right depth.
+
+**Solution:** A custom **GLSL ShaderPass** injected into the EffectComposer pipeline — two-scale grid (56px major / 14px minor) plus vignette, added and removed dynamically on theme toggle. Zero geometry cost.
+
+---
+
+## Architecture
+
+```
+Simulation (main.js)
+├── SpatialHashGrid        — O(1) neighbour lookup, shared by boids + predators
+├── Boid                   — steering, boundary avoidance, food-seeking, flocking
+├── Predator               — priority-scored hunt using spatial grid
+├── TrailSystem            — ring-buffer LineSegments, one draw call per species
+├── EffectComposer chain   — RenderPass → UnrealBloomPass → BlueprintPass (opt.)
+├── applyTheme()           — dark / blueprint mode, all materials + lighting + passes
+├── setupUI()              — bind() + delegated localStorage persistence
+└── createBlueprintPass()  — GLSL graph-paper grid + vignette shader
+```
+
+---
 
 ## Features
 
-- **Living Ecosystem (NEW)**:
-  - **Ecosystem Layering**: Species now respect their natural habitats; birds soar in the sky while fish stay in the depths.
-  - **Infinite Wrapping Space**: Toggleable toroidal space that allows the flock to roam without boundaries.
-  - **Dynamic Motion Styles**: Realistic tail-wagging for fish and flapping for birds using procedural animation.
-  - **Predator Priority Logic**: Predators now exhibit more sophisticated hunting behaviors, prioritizing larger targets.
-  - **Adjustable Space Scale**: Dynamically compress or enlarge the simulation environment in real-time.
-- **Classic Boids Rules**: Separation, Alignment, and Cohesion with added **Wander** and **Species Avoidance**.
-- **Dynamic Species**: 
-  - **Species**: Small Fish, Large Fish, and Birds with distinct visual styles and predator-prey hierarchy.
-  - **Predators**: Sophisticated hunt-and-consume cycles.
-  - **Food Sources**: Dynamic energy sources that attract and nourish boids.
-- **Cinematic Visuals**:
-  - **Custom Shader Trails**: GLSL-based light ribbons that fade organically over time.
-  - **Supernatural Bloom & Vignette**: Multi-pass post-processing for a premium aesthetic.
-  - **Tone Mapping**: ACES Filmic for photography-grade color reproduction.
-  - **Glassmorphism UI**: Modern, translucent control panel.
-- **State-of-the-Art Performance**: Optimized Spatial Hash Grid and Instanced Rendering for thousands of boids.
+| System | Detail |
+|---|---|
+| **Flocking** | Separation · Alignment · Cohesion + wander + species avoidance |
+| **Ecosystem** | 3 species · predators with hunt cooldown · food sources · habitat layering |
+| **Rendering** | InstancedMesh · custom GLSL trails · ACES tone mapping · Unreal Bloom |
+| **Themes** | Dark (cinematic) ↔ Blueprint (navy + cyan + wireframe boids + grid shader) |
+| **UI** | Liquid glass panels · FAB quick-controls popover · mobile drawer |
+| **Persistence** | All 19 settings saved to localStorage, restored on reload |
+| **Audio** | Microphone reactivity via Web Audio API |
+| **Mobile** | Auto-budget tuning · safe-area-inset · Android Chrome tested |
 
-## Optimization & Architecture
+---
 
-- **Spatial Partitioning**: Implements a **Spatial Hash Grid** to reduce neighbor lookup complexity from $O(N^2)$ to $O(N)$ for local interactions.
-- **Instanced Rendering**: Utilizes `THREE.InstancedMesh` with **Slerped Quaternions** for butter-smooth orientation transitions.
-- **Memory Management**: Zero-allocation "hot" loops. Uses object pooling and scratchpad vectors to prevent garbage collection stuttering during simulation.
-- **Frame-Rate Independence**: Physics calculations use `deltaTime` to ensure consistent simulation speed across varying refresh rates.
+## Running locally
 
-## How to Run
+```bash
+git clone https://github.com/joethesaint/boids_algo_sim
+cd boids_algo_sim
+python3 -m http.server 8080 --bind 127.0.0.1
+# open http://127.0.0.1:8080
+```
 
-1. **Clone the repository.**
-2. **Open `index.html`** in any modern web browser.
-   > *Note: For Audio Reactivity (Microphone access), some browsers may require a local server (e.g., `python -m http.server` or a VS Code Live Server extension).*
+No npm. No build. One file open.
+
+---
 
 ## Controls
 
-*   **Camera Navigation:**
-    *   **Left Mouse (Drag):** Rotate the camera around the simulation.
-    *   **Right Mouse (Drag) / Arrows:** Pan the camera target.
-    *   **Scroll Wheel:** Zoom in and out.
-*   **Interaction & Cinematic Features:**
-    *   **Mouse Field:** Boids are naturally influenced by the cursor position in 3D space.
-    *   **[H] Key:** Toggle **Cinematic Mode** to hide all UI elements for an immersive experience.
-*   **UI Panels & Features:**
-    *   **Simulation Data (Left Panel):** View real-time FPS and total boid count. Add or remove boids using the buttons.
-    *   **Simulation Controls (Left Panel):** Pause/resume the simulation, reset the state, or toggle "Follow Boid" mode.
-    *   **Flocking Rules (Left Panel):** Fine-tune Reynolds' algorithms (Separation, Alignment, Cohesion) using live sliders.
-    *   **Ecosystem Control (Right Panel):** Adjust the species ratio and tweak rendering settings (Bloom, Ambient Light).
-    *   **Features Toggle (Right Panel):** Enable or disable Custom Trails, the Food System, and Predator logic.
-    *   **Audio Reactivity (Right Panel):** Click **Enable Microphone** to allow the flock to react to live audio input.
+| Input | Action |
+|---|---|
+| Left drag | Orbit camera |
+| Scroll | Zoom |
+| Mouse move | Influence flock (attract / steer) |
+| ▶ FAB (bottom-right) | Quick flocking controls popover |
+| Features panel | Toggle trails · food · predators · blueprint mode |
+
+---
 
 ## AI Attribution
 
-AI was instrumental in the development of this simulation. This project was built using AI as a primary engineering tool, spanning multiple models and interfaces including **Antigravity** and the **Gemini CLI**.
+Built using AI as a primary engineering collaborator across **Antigravity** and **Gemini CLI** — for architecture decisions, debugging, shader authoring, and UI iteration. All code reviewed, tested, and understood before committing.
 
-## License
+---
 
-This project is open-source and available under the MIT License.
+MIT License

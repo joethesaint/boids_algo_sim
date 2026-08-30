@@ -33,7 +33,22 @@
 
     <button id="toggle-left-panel" class="glass-fab mobile-toggle" aria-label="Toggle controls"><span class="material-symbols-outlined">menu</span></button>
     <button id="toggle-right-panel" class="glass-fab mobile-toggle" aria-label="Toggle ecosystem panel"><span class="material-symbols-outlined">eco</span></button>
-    <button id="shortcut-flocking" class="glass-fab fab-play" aria-label="Jump to Flocking Rules"><span class="material-symbols-outlined">play_arrow</span></button>
+    <!-- Flocking quick-popover: anchored above the play FAB -->
+    <div id="flocking-popover" class="flocking-popover" role="dialog" aria-label="Quick flocking controls" aria-hidden="true">
+        <div class="pop-slider">
+            <div class="slider-label"><span>Separation</span><span id="pop-separation-value">2.0</span></div>
+            <input type="range" id="pop-separation" min="0" max="5" step="0.1" value="2.0">
+        </div>
+        <div class="pop-slider">
+            <div class="slider-label"><span>Alignment</span><span id="pop-alignment-value">1.4</span></div>
+            <input type="range" id="pop-alignment" min="0" max="5" step="0.1" value="1.4">
+        </div>
+        <div class="pop-slider">
+            <div class="slider-label"><span>Cohesion</span><span id="pop-cohesion-value">1.1</span></div>
+            <input type="range" id="pop-cohesion" min="0" max="5" step="0.1" value="1.1">
+        </div>
+    </div>
+    <button id="shortcut-flocking" class="glass-fab fab-play" aria-label="Quick flocking controls"><span class="material-symbols-outlined">play_arrow</span></button>
     <div id="mobile-backdrop"></div>
 
     <div id="left-panel" class="panel-container">
