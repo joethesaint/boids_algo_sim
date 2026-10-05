@@ -5,7 +5,8 @@
     toggle.id = 'menu-toggle';
     toggle.setAttribute('aria-controls', 'controls');
     toggle.setAttribute('aria-expanded', 'false');
-    toggle.innerHTML = '<svg viewBox="0 0 36 36" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="18" cy="18" r="4"/><ellipse cx="18" cy="18" rx="16" ry="7" transform="rotate(-35 18 18)"/><circle cx="29" cy="10" r="2" fill="#e9b872" stroke="none"/></svg><span>Menu</span>';
+    toggle.setAttribute('aria-label', 'Open world controls');
+    toggle.innerHTML = '<svg viewBox="0 0 36 36" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="18" cy="18" r="4"/><ellipse cx="18" cy="18" rx="16" ry="7" transform="rotate(-35 18 18)"/><circle cx="29" cy="10" r="2" fill="#e9b872" stroke="none"/></svg>';
     document.body.append(toggle);
     let suppressClick = false;
     let menuPositioned = false;
@@ -30,7 +31,7 @@
     function openMenu(open, returnFocus = true) {
         panel.hidden = !open;
         toggle.setAttribute('aria-expanded', String(open));
-        toggle.querySelector('span').textContent = open ? 'Close' : 'Menu';
+        toggle.setAttribute('aria-label', open ? 'Close world controls' : 'Open world controls');
         const c = controls();
         if (c) { c.keys.clear(); c.vel.set(0,0,0); }
         if (open) { positionPanel(); panel.querySelector('button').focus(); }

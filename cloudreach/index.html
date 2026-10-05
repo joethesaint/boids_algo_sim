@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#78bce2">
+  <title>Cloudreach — World / 03</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="world" aria-label="Cloudreach, an explorable 3D cloud ocean" tabindex="0"></canvas>
+  <header><span>WORLD / 03</span><button id="menu" aria-label="Open Cloudreach controls" aria-expanded="false"><i></i><i></i><i></i></button></header>
+  <main><p class="eyebrow">Atmospheric study</p><h1>Cloudreach.</h1><p class="lede">A world above the weather.</p></main>
+  <aside id="panel" hidden>
+    <div class="heading"><h2>Cloudreach</h2><button id="close" aria-label="Close controls">×</button></div>
+    <label>Cloud density <input id="density" type="range" min="12" max="42" step="1" value="28"><output id="density-value">28 formations</output></label>
+    <div class="actions"><button id="pause">Pause drift</button><button id="home">Home view</button></div>
+    <p>Drag to look around · wheel or pinch to move closer. The formations are original browser geometry, built from layered billows and haze.</p>
+    <a href="../hollowmere/prototype.html">Enter Hollowmere ↗</a><a href="../index.html">Return to Boids lab ↗</a>
+  </aside>
+  <div id="status">Forming atmosphere…</div>
+  <footer><span id="readout">Preparing clouds</span><span>Drag to explore</span></footer>
+  <script src="https://unpkg.com/three@0.132.2/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

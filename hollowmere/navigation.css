@@ -14,7 +14,7 @@ html, body, button, input, summary { -webkit-tap-highlight-color: transparent; }
 .gesture { display:inline-block; width:28px; height:34px; border-left:1px solid #fff8; border-right:1px solid #fff8; margin-right:10px; vertical-align:middle; }
 .gesture::after { content:''; display:block; width:5px;height:5px;background:#e9b872;border-radius:50%;margin:14px auto;animation:gesture 1.6s ease-in-out 3; }
 @keyframes gesture { 50% { transform:translateY(-10px); } }
-#menu-toggle { position:fixed; right:16px; bottom:max(16px,env(safe-area-inset-bottom)); z-index:4; display:flex; align-items:center; gap:10px; min-height:56px; min-width:56px; padding:8px 18px 8px 10px; margin:0; border-radius:30px; background:#10231ff2; color:#f2ede2; border:1px solid #b2c5b978; font:14px system-ui,sans-serif; text-transform:none; touch-action:none; user-select:none; }
+#menu-toggle { position:fixed; right:16px; bottom:max(16px,env(safe-area-inset-bottom)); z-index:4; display:grid; place-items:center; min-height:56px; min-width:56px; padding:8px; margin:0; border-radius:50%; background:#10231ff2; color:#f2ede2; border:1px solid #b2c5b978; font:14px system-ui,sans-serif; text-transform:none; touch-action:none; user-select:none; }
 #menu-toggle svg { width:32px;height:32px; transition:transform .35s; }
 #menu-toggle[aria-expanded=true] svg { transform:rotate(75deg); }
 button:active { transform:scale(.97); }

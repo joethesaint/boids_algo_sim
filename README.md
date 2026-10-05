@@ -4,7 +4,11 @@ Live demo: https://joethesaint.github.io/boids_algo_sim/
 
 World-first demo: https://joethesaint.github.io/boids_algo_sim/hollowmere/prototype.html
 
-The root demo preserves the original boids laboratory. **Enter Universe** opens the Hollowmere world, with Android-friendly navigation, a movable menu, flock controls, and Follow a bird. The return action and Android back gesture restore the laboratory.
+Cloudreach: https://joethesaint.github.io/boids_algo_sim/cloudreach/
+
+Bliss: https://joethesaint.github.io/boids_algo_sim/bliss/
+
+The root demo preserves the original boids laboratory. **Enter Universe** opens Hollowmere, **Bliss** opens the flamingo landscape, and **Cloudreach** opens a separate atmospheric cloud world. The return action and Android back gesture restore the laboratory.
 
 > Built to explore three questions: *How does complex group behaviour emerge from simple rules? What are the real performance limits of WebGL on mobile? And how do you design a UI that lives on top of a live 3D canvas without fighting it?*
 

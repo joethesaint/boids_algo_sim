@@ -1,9 +1,13 @@
 // Keep the laboratory in memory while visiting the separate world runtime.
 (() => {
     const entry = document.getElementById('enter-universe');
+    const bliss = document.getElementById('enter-bliss');
+    const cloudreach = document.getElementById('enter-cloudreach');
     let cover;
     let universeHistory = false;
     const worldUrl = new URL('hollowmere/prototype.html', location.href);
+    bliss?.addEventListener('click', () => { location.href = new URL('bliss/', location.href).href; });
+    cloudreach?.addEventListener('click', () => { location.href = new URL('cloudreach/', location.href).href; });
     const origin = worldUrl.origin;
     function leave() {
         if (!cover) return;
