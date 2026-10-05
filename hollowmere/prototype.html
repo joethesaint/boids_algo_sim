@@ -116,7 +116,7 @@
       const info = w.info(), stats = w.stats();
       const flock = boids();
       if (flock) document.getElementById('flock-state').textContent = birdsEnabled ? 'Active' : 'Hidden';
-      out.textContent = `${flock ? flock.stats.birds : '…'} birds · ${flock ? flock.stats.perched : 0} perched · ${w.camera().mode} · ${w.styleName()}`;
+      out.textContent = `${flock ? flock.stats.birds : '…'} birds · ${flock ? flock.stats.flamingos : 0} flamingos · ${flock ? flock.stats.perched : 0} perched · ${w.camera().mode} · ${w.styleName()}`;
     }, 500);
   </script>
   <link rel="stylesheet" href="navigation.css">
