@@ -54,6 +54,7 @@
 <div id="mode" class="panel">Flying</div>
 <div id="fps" class="panel" hidden></div>
 <script type="module">
+import { wingsGeometry, perchLayout } from "./wings-adapter.js";
 import*as e from"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js";var t=Object.defineProperty,n=(e,t,n)=>()=>{if(n)throw n[0];try{return e&&(t=e(e=0)),t}catch(e){throw n=[e],e}},r=(e,n)=>{let r={};for(var i in e)t(r,i,{get:e[i],enumerable:!0});return n||t(r,Symbol.toStringTag,{value:`Module`}),r},i=e=>document.getElementById(e),a=class{constructor(){this.loader=i(`loader`),this.bar=i(`loader-bar`),this.hint=i(`hint`),this.toast=i(`toast`),this.toastNum=i(`toast-num`),this.toastName=i(`toast-name`),this.toastNote=i(`toast-note`),this.dots=i(`styles`),this.mode=i(`mode`),this.fps=i(`fps`),this.toastTimer=0,this.hintTimer=0,this.hidden=!1,this.lastActive=performance.now()}progress(e){let t=Math.max(.02,Math.min(1,e));this.bar&&(this.bar.style.transform=`scaleX(${t})`),this.loader&&(this.loader.style.setProperty(`--p`,t.toFixed(3)),this.loader.setAttribute(`aria-valuenow`,String(Math.round(t*100))))}ready(e=!1){this.loader.classList.add(`done`),e&&(this.loader.hidden=!0),setTimeout(()=>{this.loader.hidden=!0},1200),document.body.classList.add(`running`),this.showHint()}showHint(){this.hidden||(this.hint.classList.add(`show`),this.dots.classList.add(`show`),clearTimeout(this.hintTimer),this.hintTimer=setTimeout(()=>{this.hint.classList.remove(`show`),this.dots.classList.remove(`show`)},9e3))}toggleHidden(){this.hidden=!this.hidden,document.body.classList.toggle(`ui-hidden`,this.hidden),this.hidden||this.showHint()}setStyle(e,t,n=!0){[...this.dots.children].forEach((t,n)=>t.classList.toggle(`on`,n===e)),n&&!this.hidden&&(this.toastNum.textContent=String(e+1),this.toastName.textContent=t.name,this.toastNote.textContent=t.note,this.toast.classList.remove(`show`),this.toast.offsetWidth,this.toast.classList.add(`show`),this.dots.classList.add(`show`),clearTimeout(this.toastTimer),this.toastTimer=setTimeout(()=>{this.toast.classList.remove(`show`),this.hint.classList.contains(`show`)||this.dots.classList.remove(`show`)},2400))}setMode(e){this.hidden||(this.mode.textContent=e===`walk`?`Walking`:e===`tour`?`Tour`:`Flying`,this.mode.classList.remove(`show`),this.mode.offsetWidth,this.mode.classList.add(`show`),clearTimeout(this.modeTimer),this.modeTimer=setTimeout(()=>this.mode.classList.remove(`show`),1600))}setFps(e){this.fps&&(this.fps.textContent=e)}},o,s=n((()=>{o={uTime:{value:0},uSunDir:{value:new e.Vector3(0,1,0)},uSunColor:{value:new e.Color(1,1,1)},uSkyAmb:{value:new e.Color(.5,.6,.8)},uGroundAmb:{value:new e.Color(.25,.22,.18)},uCamPos:{value:new e.Vector3},uFog:{value:new e.Vector4(.0011,.012,0,1)},uFogTint:{value:new e.Color(.7,.78,.9)},uWind:{value:new e.Vector4(.8,.6,1,0)},uStyle:{value:0},uStyleA:{value:new e.Vector4(1,0,0,1)},uStyleB:{value:new e.Vector4(1,1,1,1)},uShadowColor:{value:new e.Color(.35,.4,.6)},uNoise:{value:null},uShadow0:{value:null},uShadow1:{value:null},uShadowM0:{value:new e.Matrix4},uShadowM1:{value:new e.Matrix4},uShadowP:{value:new e.Vector4(1/2048,1/2048,1,1)},uSkyTex:{value:null},uCloud:{value:new e.Vector4(.48,0,0,.55)},uQuality:{value:1},uHeightTex:{value:null},uSplatA:{value:null},uSplatB:{value:null},uWorld:{value:new e.Vector4(384,768,513,1.5)}}})),c,l,u,d,f,p,m=n((()=>{c=`
 precision highp float;
 precision highp int;
@@ -2990,6 +2991,7 @@ const HB_VERT=`
 in vec4 aPosB;
 in vec4 aVelS;
 in vec4 aMisc;
+in float aWing;
 out vec3 vWorld;
 out vec3 vNormal;
 out float vTint;
@@ -3006,13 +3008,14 @@ void main() {
   vec3 u = u0 * cb - r0 * sb;
   vec3 p = position;
   vec3 n = normal;
-  float fx = abs(p.x);
-  float wing = step(0.15, fx);
-  float fl = sin(aPosB.w) * aMisc.y;
-  float k = fl * 0.7 - 0.05;
-  p.y += k * fx * (0.5 + 0.5 * fx);
-  p.x *= 1.0 - 0.14 * max(-fl, 0.0) * wing;
-  n.x -= sign(position.x) * k * n.y * wing;
+  // Rotate only the named wing meshes; the torso stays rigid.
+  float angle = aWing * sin(aPosB.w) * aMisc.y * 0.7;
+  float ca = cos(angle), sa = sin(angle);
+  if (abs(aWing) > 0.5) {
+    vec2 local = vec2(p.x, p.y + 0.13);
+    p.xy = mat2(ca, sa, -sa, ca) * local - vec2(0.0, 0.13);
+    n.xy = mat2(ca, sa, -sa, ca) * n.xy;
+  }
   n = normalize(n);
   vec3 wp = aPosB.xyz + (r * p.x + u * p.y + f * p.z) * aVelS.w;
   vWorld = wp;
@@ -3066,50 +3069,81 @@ function hollowBoids(groundFn,scene){
   pos[H*3]=0; pos[H*3+1]=groundFn(0,0)+70; pos[H*3+2]=0; vel[H*3]=12; vel[H*3+2]=0; flock[H]=-1; phase[H]=0; amp[H]=.4;
   const tints=new Float32Array(TOTAL); for(let i=0;i<N;i++) tints[i]=FLOCKS[flock[i]].tint; tints[H]=3;
   const scl=new Float32Array(TOTAL); for(let i=0;i<N;i++) scl[i]=1.15+rnd()*.35; scl[H]=2.8;
-  // Low-poly bird: deliberate silhouette, a few large triangular planes, and
-  // one restrained top crease. Every face is intentionally unshared so the
-  // shader keeps the faceted normals instead of smoothing the form away.
-  const V=[],tri=(a,b,c)=>V.push(...a,...b,...c),quad=(a,b,c,d)=>{tri(a,b,c);tri(a,c,d);};
-  const ring=(z,rx,ry,y=0,n=6)=>Array.from({length:n},(_,i)=>{const a=i*Math.PI*2/n;return [Math.cos(a)*rx,y+Math.sin(a)*ry,z];});
-  const connect=(a,b)=>{for(let i=0;i<a.length;i++){const j=(i+1)%a.length;quad(a[i],b[i],b[j],a[j]);}};
-  const chest=ring(.46,.26,.22,.04), belly=ring(-.03,.48,.34,0), rump=ring(-.62,.30,.24,.02);
-  connect(chest,belly);connect(belly,rump);
-  tri([0,.05,.88],chest[0],chest[1]);tri([0,.05,.88],chest[1],chest[2]);
-  tri([0,.05,.88],chest[2],chest[3]);tri([0,.05,.88],chest[3],chest[4]);
-  tri([0,.05,.88],chest[4],chest[5]);tri([0,.05,.88],chest[5],chest[0]);
-  const tailRoot=[0,.02,-.78];
-  tri(tailRoot,[-.46,.05,-1.28],[0,.12,-1.05]);
-  tri(tailRoot,[0,.12,-1.05],[.46,.05,-1.28]);
-  tri(tailRoot,[0,-.03,-1.16],[-.26,.03,-1.38]);
-  tri(tailRoot,[.26,.03,-1.38],[0,-.03,-1.16]);
-  // Beak and brow planes make the forward direction readable at small scale.
-  tri([0,.16,1.22],[-.13,.10,.82],[.13,.10,.82]);
-  tri([0,.16,1.22],[.13,.10,.82],[0,-.02,.84]);
-  tri([0,.16,1.22],[0,-.02,.84],[-.13,.10,.82]);
-  // Broad swept wings: each side is a four-point folded polygon with a dim
-  // inner crease represented by the second pair of triangles.
-  for(const s of[-1,1]){
-    const root=[s*.20,.18,.38], shoulder=[s*.42,.14,.12], tip=[s*1.42,.04,-.28], rear=[s*1.05,.02,-.66], crease=[s*.60,.10,-.18];
-    quad(root,shoulder,crease,[s*.32,.20,-.08]);
-    quad(shoulder,tip,rear,crease);
-    tri(shoulder,tip,crease);
-    tri(crease,tip,rear);
-  }
-  const base=new e.BufferGeometry();base.setAttribute(`position`,new e.Float32BufferAttribute(V,3));base.computeVertexNormals();
-  const geo=new e.InstancedBufferGeometry();geo.setAttribute(`position`,base.getAttribute(`position`));geo.setAttribute(`normal`,base.getAttribute(`normal`));
+  const base=wingsGeometry(false);
+  const geo=new e.InstancedBufferGeometry();
+  geo.setIndex(base.index);
+  for(const key of ['position','normal','aWing']) geo.setAttribute(key,base.getAttribute(key));
   const mk=(n)=>{const a=new e.InstancedBufferAttribute(new Float32Array(TOTAL*4),4);a.setUsage(e.DynamicDrawUsage);geo.setAttribute(n,a);return a;};
   const aPos=mk(`aPosB`),aVel=mk(`aVelS`),aMisc=mk(`aMisc`);
   geo.instanceCount=TOTAL;
   const {mat}=h({name:`boids`,vertex:HB_VERT,fragment:HB_FRAG,side:e.DoubleSide});
   const mesh=new e.Mesh(geo,mat);mesh.frustumCulled=!1;scene.add(mesh);
+  const folded=wingsGeometry(true), perchGeo=new e.InstancedBufferGeometry();
+  perchGeo.setIndex(folded.index);
+  for(const key of ['position','normal','aWing']) perchGeo.setAttribute(key,folded.getAttribute(key));
+  const perchAttrs={};
+  for(const key of ['aPosB','aVelS','aMisc']) {
+    const attr=new e.InstancedBufferAttribute(new Float32Array(N*4),4);
+    attr.setUsage(e.DynamicDrawUsage);perchGeo.setAttribute(key,attr);perchAttrs[key]=attr;
+  }
+  perchGeo.instanceCount=0;
+  const perchMesh=new e.Mesh(perchGeo,mat);perchMesh.frustumCulled=false;scene.add(perchMesh);
+  const layout=perchLayout(groundFn,N), state=new Uint8Array(N), releaseAt=new Float64Array(N), saved=new Float32Array(N*3);
+  let perchRequested=false, clock=0;
+  const footHeight=-folded.boundingBox.min.y;
+  // Reuse the world's deferred shading material for wires and timber supports.
+  const staticVertex=`out vec3 vWorld;out vec3 vNormal;out float vTint;
+    void main(){vec4 wp=modelMatrix*vec4(position,1.0);vWorld=wp.xyz;
+    vNormal=normalize(mat3(modelMatrix)*normal);vTint=2.0;gl_Position=projectionMatrix*viewMatrix*wp;}`;
+  const supportMat=h({name:'perch-supports',vertex:staticVertex,fragment:HB_FRAG,side:e.DoubleSide}).mat;
+  const perches=new e.Group();scene.add(perches);
+  for(const path of layout.paths) {
+    const curve=new e.CatmullRomCurve3(path.map(p=>new e.Vector3(...p)));
+    perches.add(new e.Mesh(new e.TubeGeometry(curve,48,.055,3,false),supportMat));
+    for(const endpoint of [path[0],path[path.length-1]]) {
+      const [x,y,z]=endpoint, floor=groundFn(x,z), height=y-floor+1;
+      const pole=new e.Mesh(new e.CylinderGeometry(.18,.26,height,5),supportMat);
+      pole.position.set(x,floor+height/2,z);perches.add(pole);
+    }
+  }
+  function requestPerching(value) {
+    perchRequested=!!value;
+    for(let i=0;i<N;i++) {
+      if(perchRequested) state[i]=state[i]===2?2:1;
+      else if(state[i]) releaseAt[i]=clock+.1+(i%17)*.16;
+    }
+  }
+  function updatePerching(dt) {
+    for(let i=0;i<N;i++) {
+      if(!state[i]) continue;
+      const a=layout.anchors[i], offset=i*3, y=a[1]+footHeight*scl[i];
+      if(!perchRequested&&clock>=releaseAt[i]) {
+        state[i]=0;vel[offset]=i%2?6:-6;vel[offset+1]=5;vel[offset+2]=10;amp[i]=1;continue;
+      }
+      if(state[i]===1) {
+        // Frame-rate independent arrival, with a bounded approach speed.
+        let dx=a[0]-saved[offset],dy=y-saved[offset+1],dz=a[2]-saved[offset+2];
+        const distance=Math.hypot(dx,dy,dz), speed=Math.min(P.vmax,distance*1.8);
+        const factor=distance>0?Math.min(1,dt*speed/distance):0;
+        pos[offset]=saved[offset]+dx*factor;pos[offset+1]=Math.max(saved[offset+1]+dy*factor,groundFn(pos[offset],saved[offset+2]+dz*factor)+footHeight*scl[i]+1);pos[offset+2]=saved[offset+2]+dz*factor;
+        vel[offset]=distance?dx/distance*speed:0;vel[offset+1]=distance?dy/distance*speed:0;vel[offset+2]=distance?dz/distance*speed:0;
+        bank[i]*=Math.exp(-dt*6);amp[i]=Math.min(1,.3+speed*.06);
+        if(distance<.2) state[i]=2;
+      }
+      if(state[i]===2) {
+        pos[offset]=a[0];pos[offset+1]=y;pos[offset+2]=a[2];
+        vel[offset]=vel[offset+1]=vel[offset+2]=0;bank[i]=amp[i]=0;
+      }
+    }
+  }
   // spatial hash
   const CS=P.perc, grid=new Map();
   const key=(x,y,z)=>((x+512)*1024+(y+512))*1024+(z+512);
   let enabled=!0, hawkCool=0, hawkTarget=-1, scatter=0, followIndex=-1, followReady=!1, followEye=[0,0,0], followTarget=[0,0,0];
-  const stats={birds:N,hawkChases:0};
+  const stats={birds:N,hawkChases:0,perched:0,landing:0,flying:N};
   function step(dt,t,cam){
     grid.clear();
-    for(let i=0;i<N;i++){const kk=key(Math.floor(pos[i*3]/CS),Math.floor(pos[i*3+1]/CS),Math.floor(pos[i*3+2]/CS));let c=grid.get(kk);if(!c){c=[];grid.set(kk,c);}c.push(i);}
+    for(let i=0;i<N;i++){if(state[i])continue;const kk=key(Math.floor(pos[i*3]/CS),Math.floor(pos[i*3+1]/CS),Math.floor(pos[i*3+2]/CS));let c=grid.get(kk);if(!c){c=[];grid.set(kk,c);}c.push(i);}
     const tg=FLOCKS.map((f,i)=>tgtAt(f,i,t));
     const hx=pos[H*3],hy=pos[H*3+1],hz=pos[H*3+2];
     const sepSq=P.sepR*P.sepR, percSq=P.perc*P.perc;
@@ -3143,7 +3177,7 @@ function hollowBoids(groundFn,scene){
     // hawk
     {const hv=[vel[H*3],vel[H*3+1],vel[H*3+2]];let tx,ty,tz,spd=14;
       if(hawkCool>0)hawkCool-=dt;
-      if(hawkCool<=0){ if(hawkTarget<0||rnd()<.02){let best=1e9;hawkTarget=-1;for(let i=0;i<N;i++){const d2=(pos[i*3]-hx)**2+(pos[i*3+1]-hy)**2+(pos[i*3+2]-hz)**2;if(d2<best&&d2<130*130){best=d2;hawkTarget=i;}}}}
+      if(hawkCool<=0){ if(hawkTarget<0||rnd()<.02){let best=1e9;hawkTarget=-1;for(let i=0;i<N;i++){if(state[i])continue;const d2=(pos[i*3]-hx)**2+(pos[i*3+1]-hy)**2+(pos[i*3+2]-hz)**2;if(d2<best&&d2<130*130){best=d2;hawkTarget=i;}}}}
       if(hawkTarget>=0&&hawkCool<=0){tx=pos[hawkTarget*3];ty=pos[hawkTarget*3+1];tz=pos[hawkTarget*3+2];spd=21;
         if((tx-hx)**2+(ty-hy)**2+(tz-hz)**2<30){hawkCool=14;hawkTarget=-1;stats.hawkChases++;}}
       else{hawkTarget=-1;const T=tg[0];tx=T[0]+Math.cos(t*.12)*140;tz=T[2]+Math.sin(t*.12)*140;ty=groundFn(tx,tz)+75+10*Math.sin(t*.2);}
@@ -3162,20 +3196,27 @@ function hollowBoids(groundFn,scene){
       const tb=Math.max(-.9,Math.min(.9,-dh/dt*.35));bank[i]+=(tb-bank[i])*Math.min(1,dt*4);
       vel[i*3]=vx;vel[i*3+1]=vy;vel[i*3+2]=vz;
       pos[i*3]+=vx*dt;pos[i*3+1]+=vy*dt;pos[i*3+2]+=vz*dt;
-      const ta=Math.max(.12,Math.min(1,.45+vy*.12+(Math.hypot(acc[i*3],acc[i*3+2])>8?.25:0)));amp[i]+=(ta-amp[i])*Math.min(1,dt*3);
+      const effort=Math.hypot(acc[i*3],acc[i*3+2]);const glide=vy<1&&effort<8&&Math.sin(t*.7+i*1.73)>.4;const ta=glide?.04:Math.max(.12,Math.min(1,.45+vy*.12+(effort>8?.25:0)));amp[i]+=(ta-amp[i])*Math.min(1,dt*3);
       phase[i]+=dt*(hawk?5:11+s*.35);
     }
   }
   function upload(){
-    for(let i=0;i<TOTAL;i++){
-      aPos.array[i*4]=pos[i*3];aPos.array[i*4+1]=pos[i*3+1];aPos.array[i*4+2]=pos[i*3+2];aPos.array[i*4+3]=phase[i];
-      aVel.array[i*4]=vel[i*3];aVel.array[i*4+1]=vel[i*3+1];aVel.array[i*4+2]=vel[i*3+2];aVel.array[i*4+3]=scl[i];
-      aMisc.array[i*4]=tints[i];aMisc.array[i*4+1]=amp[i];aMisc.array[i*4+2]=bank[i];}
-    aPos.needsUpdate=aVel.needsUpdate=aMisc.needsUpdate=!0;
+    let flying=0,perched=0,landing=0;
+    for(let i=0;i<TOTAL;i++) {
+      const foldedPose=i<N&&state[i]===2, index=foldedPose?perched++:flying++;
+      if(i<N&&state[i]===1) landing++;
+      const p=foldedPose?perchAttrs.aPosB:aPos,v=foldedPose?perchAttrs.aVelS:aVel,m=foldedPose?perchAttrs.aMisc:aMisc;
+      p.array.set([pos[i*3],pos[i*3+1],pos[i*3+2],phase[i]],index*4);
+      v.array.set([vel[i*3],vel[i*3+1],foldedPose?(i%2?1:-1):vel[i*3+2],scl[i]],index*4);
+      m.array.set([tints[i],foldedPose?0:amp[i],bank[i],0],index*4);
+    }
+    geo.instanceCount=flying;perchGeo.instanceCount=perched;
+    stats.perched=perched;stats.landing=landing;stats.flying=N-perched-landing;
+    for(const attr of [aPos,aVel,aMisc,...Object.values(perchAttrs)]) attr.needsUpdate=true;
   }
   upload();
-  document.addEventListener(`keydown`,ev=>{if(ev.code===`KeyB`&&!ev.repeat){enabled=!enabled;mesh.visible=enabled;}});
-  const api={mesh,stats,setEnabled(value){enabled=!!value;mesh.visible=enabled;},setFollow(value){followIndex=value?0:-1;followReady=!1;},setParameters(next={}){if(Number.isFinite(next.separation))P.wSep=next.separation;if(Number.isFinite(next.alignment))P.wAli=next.alignment;if(Number.isFinite(next.cohesion))P.wCoh=next.cohesion;if(Number.isFinite(next.speed)){P.vmin=8*next.speed;P.vmax=15*next.speed;}},update(dt,t,cam){if(!enabled||!(dt>0))return;let rem=Math.min(dt,.1);while(rem>1e-4){const s=Math.min(rem,1/30);step(s,t,cam);rem-=s;}if(followIndex>=0&&window.__world?.controls){const i=followIndex*3,c=window.__world.controls,b=1-Math.exp(-dt*5),tx=pos[i],ty=pos[i+1],tz=pos[i+2],ex=tx-vel[i]*2.4,ey=ty+8,ez=tz-vel[i+2]*2.4;if(!followReady){followEye=[ex,ey,ez];followTarget=[tx,ty,tz];followReady=!0;}else{followEye[0]+=(ex-followEye[0])*b;followEye[1]+=(ey-followEye[1])*b;followEye[2]+=(ez-followEye[2])*b;followTarget[0]+=(tx-followTarget[0])*b;followTarget[1]+=(ty-followTarget[1])*b;followTarget[2]+=(tz-followTarget[2])*b;}c.pos.set(followEye[0],followEye[1],followEye[2]);c.vel.set(0,0,0);const dx=followTarget[0]-followEye[0],dy=followTarget[1]-followEye[1],dz=followTarget[2]-followEye[2],d=Math.hypot(dx,dy,dz)||1;c.yaw=c.tYaw=Math.atan2(-dx,-dz);c.pitch=c.tPitch=Math.asin(Math.max(-1,Math.min(1,dy/d)));c.idleDrift=!1;c.apply();}upload();}};
+  document.addEventListener(`keydown`,ev=>{if(ev.code===`KeyB`&&!ev.repeat){enabled=!enabled;mesh.visible=perchMesh.visible=enabled;}});
+  const api={mesh,perchMesh,stats,setPerching:requestPerching,setEnabled(value){enabled=!!value;mesh.visible=perchMesh.visible=enabled;},setFollow(value){followIndex=value?0:-1;followReady=!1;},setParameters(next={}){if(Number.isFinite(next.separation))P.wSep=next.separation;if(Number.isFinite(next.alignment))P.wAli=next.alignment;if(Number.isFinite(next.cohesion))P.wCoh=next.cohesion;if(Number.isFinite(next.speed)){P.vmin=8*next.speed;P.vmax=15*next.speed;}},update(dt,t,cam){if(!enabled||!(dt>0))return;let rem=Math.min(dt,.1);while(rem>1e-4){const s=Math.min(rem,1/30);saved.set(pos.subarray(0,N*3));clock+=s;step(s,t,cam);updatePerching(s);rem-=s;}if(followIndex>=0&&window.__world?.controls){const i=followIndex*3,c=window.__world.controls,b=1-Math.exp(-dt*5),tx=pos[i],ty=pos[i+1],tz=pos[i+2],ex=tx-vel[i]*2.4,ey=ty+8,ez=tz-vel[i+2]*2.4;if(!followReady){followEye=[ex,ey,ez];followTarget=[tx,ty,tz];followReady=!0;}else{followEye[0]+=(ex-followEye[0])*b;followEye[1]+=(ey-followEye[1])*b;followEye[2]+=(ez-followEye[2])*b;followTarget[0]+=(tx-followTarget[0])*b;followTarget[1]+=(ty-followTarget[1])*b;followTarget[2]+=(tz-followTarget[2])*b;}c.pos.set(followEye[0],followEye[1],followEye[2]);c.vel.set(0,0,0);const dx=followTarget[0]-followEye[0],dy=followTarget[1]-followEye[1],dz=followTarget[2]-followEye[2],d=Math.hypot(dx,dy,dz)||1;c.yaw=c.tYaw=Math.atan2(-dx,-dz);c.pitch=c.tPitch=Math.asin(Math.max(-1,Math.min(1,dy/d)));c.idleDrift=!1;c.apply();}upload();}};
   window.__hollowBoids=api;
   return api;
 }

@@ -43,12 +43,12 @@
     <div class="row"><button data-action="pause">Pause world</button><button data-action="tour">Start tour</button></div>
     <div class="row"><button data-style="0" class="active">Natural</button><button data-style="1">Paint</button><button data-style="4">Cinematic</button></div>
     <div class="row"><button data-action="fly">Fly</button><button data-action="walk">Walk</button></div>
-    <div class="control"><label><span>Flock</span><output id="flock-state">Loading</output></label><div class="row"><button data-action="boids">Toggle birds</button></div></div>
+    <div class="control"><label><span>Flock</span><output id="flock-state">Loading</output></label><div class="row"><button data-action="boids">Toggle birds</button></div><div class="row"><button data-action="perch">Perch flock</button><button data-action="release">Release flock</button></div></div>
     <div class="control"><label for="separation"><span>Separation</span><output>2.2</output></label><input id="separation" data-boid="separation" type="range" min="0" max="5" step="0.1" value="2.2"></div>
     <div class="control"><label for="alignment"><span>Alignment</span><output>1.0</output></label><input id="alignment" data-boid="alignment" type="range" min="0" max="3" step="0.1" value="1"></div>
     <div class="control"><label for="cohesion"><span>Cohesion</span><output>0.9</output></label><input id="cohesion" data-boid="cohesion" type="range" min="0" max="3" step="0.1" value="0.9"></div>
     <div class="control"><label for="speed"><span>Flight speed</span><output>1.0</output></label><input id="speed" data-boid="speed" type="range" min="0.4" max="2" step="0.1" value="1"></div>
-    <div class="stat" id="stats">Loading world…</div>
+    <div class="stat" id="stats">Loading world…</div><details><summary>Bird credits</summary><p>Bird models and wire mathematics adapted from <a href="https://github.com/dannygelman1/Wings" target="_blank" rel="noopener">Wings by Danny Gelman</a>, MIT licence.</p></details>
   </section>
   <div id="status" class="panel">World-first spike: terrain, ambient flocks, fly/walk, tour, and cinematic rendering.</div>
   <div id="nav-guide" aria-hidden="true"><span>↑ Fly / walk</span><br><span>W · S</span><br><span>A — D</span></div>
@@ -83,6 +83,8 @@
       const child = frame.contentWindow; if (!child || !child.__setPaused) return;
       paused = !paused; child.__setPaused(paused); event.currentTarget.textContent = paused ? 'Resume world' : 'Pause world';
     });
+    document.querySelector('[data-action="perch"]').addEventListener('click', () => boids()?.setPerching(true));
+    document.querySelector('[data-action="release"]').addEventListener('click', () => boids()?.setPerching(false));
     let birdsEnabled = true;
     document.querySelector('[data-action="boids"]').addEventListener('click', () => {
       const flock = boids(); if (!flock) return;
@@ -114,7 +116,7 @@
       const info = w.info(), stats = w.stats();
       const flock = boids();
       if (flock) document.getElementById('flock-state').textContent = birdsEnabled ? 'Active' : 'Hidden';
-      out.textContent = `${flock ? flock.stats.birds : '…'} birds · ${w.camera().mode} · ${w.styleName()}`;
+      out.textContent = `${flock ? flock.stats.birds : '…'} birds · ${flock ? flock.stats.perched : 0} perched · ${w.camera().mode} · ${w.styleName()}`;
     }, 500);
   </script>
   <link rel="stylesheet" href="navigation.css">
