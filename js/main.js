@@ -430,6 +430,9 @@ class Simulation {
         // a much larger one.
         this.neighborRadius = 40;
         this.grid = new SpatialHashGrid(this.neighborRadius); this.clock = new THREE.Clock(); this.isPaused = false; this.followedBoid = null;
+        this.followCamera = new THREE.Vector3();
+        this.followLookTarget = new THREE.Vector3();
+        this.followCameraReady = false;
         this.lastFrameTime = 0;
         this.mouse3D = new THREE.Vector3(); this.raycaster = new THREE.Raycaster(); this.mouse = new THREE.Vector2();
         this.mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -485,6 +488,11 @@ class Simulation {
         document.body.appendChild(this.renderer.domElement);
         this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
+        this.flyWalkControls = new FlyWalkControls(this.camera, this.renderer.domElement, {
+            groundHeight: () => 0,
+            minWalkHeight: 0
+        });
+        this.flyWalkControls.onModeChange = mode => this.updateCameraNavigationUI(mode);
         
         // Disable right-click panning so the browser context menu can appear
         this.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: null };
@@ -1027,12 +1035,33 @@ class Simulation {
             for (let i = this.boids.length - 1; i >= 0 && count < 50; i--) { if (this.boids[i].active) { this.boids[i].active = false; this.boids[i].destroy(); count++; } }
         };
         document.getElementById('fps-view').onclick = (e) => {
-            if (this.followedBoid) { this.followedBoid = null; e.target.classList.remove('active'); e.target.textContent = "Follow Boid"; this.controls.enabled = true; }
+            if (this.followedBoid) { this.followedBoid = null; e.target.classList.remove('active'); e.target.textContent = "Follow Boid"; this.controls.target.copy(this.followLookTarget); this.controls.enabled = !this.flyWalkControls.enabled; }
             else {
                 const act = this.boids.filter(b => b.active);
-                if (act.length) { this.followedBoid = act[Math.floor(Math.random() * act.length)]; e.target.classList.add('active'); e.target.textContent = "Stop Following"; this.controls.enabled = false; }
+                if (act.length) {
+                    this.flyWalkControls.enabled = false;
+                    this.followedBoid = act[Math.floor(Math.random() * act.length)]; this.followCameraReady = false; e.target.classList.add('active'); e.target.textContent = "Stop Following"; this.controls.enabled = false;
+                    this.updateCameraNavigationUI();
+                }
             }
         };
+        const cameraNav = document.getElementById('camera-nav');
+        if (cameraNav) {
+            cameraNav.onclick = () => {
+                const enteringFlyWalk = !this.flyWalkControls.enabled;
+                if (enteringFlyWalk && this.followedBoid) {
+                    this.followedBoid = null;
+                    const followButton = document.getElementById('fps-view');
+                    followButton.classList.remove('active');
+                    followButton.textContent = 'Follow Boid';
+                }
+                this.flyWalkControls.enabled = enteringFlyWalk;
+                this.controls.enabled = !enteringFlyWalk;
+                if (enteringFlyWalk) this.flyWalkControls.syncFromCamera();
+                this.updateCameraNavigationUI();
+            };
+        }
+        this.updateCameraNavigationUI();
         window.toggleSection = (h) => { const c = h.nextElementSibling; const a = h.querySelector('.arrow'); c.classList.toggle('collapsed'); h.classList.toggle('collapsed'); a.textContent = c.classList.contains('collapsed') ? 'expand_more' : 'expand_less'; };
 
         // Mobile drawer toggles: panels slide in on demand instead of always
@@ -1143,7 +1172,7 @@ class Simulation {
 
         // Interactive Shockwave
         this.renderer.domElement.addEventListener('pointerdown', () => {
-            if (!this.mouse3D || this.isPaused) return;
+            if (!this.mouse3D || this.isPaused || this.flyWalkControls.enabled) return;
             const shockRadiusSq = 10000;
             const shockForce = 35.0;
             for (let i = 0; i < this.boids.length; i++) {
@@ -1165,7 +1194,16 @@ class Simulation {
         });
     }
 
+    updateCameraNavigationUI(mode = this.flyWalkControls.mode) {
+        const button = document.getElementById('camera-nav');
+        const status = document.getElementById('camera-nav-status');
+        const active = this.flyWalkControls.enabled;
+        if (button) button.textContent = active ? 'Exit Fly / Walk' : 'Enter Fly Mode';
+        if (status) status.textContent = active ? `${mode === 'walk' ? 'Walk' : 'Fly'} camera · WASD to move` : 'Orbit camera';
+    }
+
     animate() {
+        if (this.universeOpen) return;
 
         const now = performance.now();
         const frameDuration = 1000 / this.params.performance.fpsLimit;
@@ -1175,6 +1213,7 @@ class Simulation {
 
         this.lastFrameTime = now - (delta % frameDuration);
         const dt = Math.min(this.clock.getDelta(), 0.05) * this.params.performance.simSpeed;
+        if (this.flyWalkControls.enabled) this.flyWalkControls.update(dt);
 
         // Update Mouse 3D Position
         this.raycaster.setFromCamera(this.mouse, this.camera);
@@ -1237,17 +1276,28 @@ class Simulation {
             if (currentParams.features.food && Math.random() < currentParams.food.spawnRate && this.foodSources.length < 30) this.createFoodSources(1);
         }
         if (this.followedBoid && this.followedBoid.active) {
-            const off = _v5.copy(this.followedBoid.velocity).normalize().multiplyScalar(-30).add(_v2.set(0, 12, 0));
-            this.camera.position.lerp(_v3.copy(this.followedBoid.position).add(off), 0.1);
-            this.camera.lookAt(this.followedBoid.position);
-        } else if (this.followedBoid) { this.followedBoid = null; this.controls.enabled = true; document.getElementById('fps-view').classList.remove('active'); document.getElementById('fps-view').textContent = "Follow Boid"; }
+            const b = this.followedBoid;
+            const blend = 1 - Math.exp(-dt * 7);
+            const off = _v5.copy(b.velocity).normalize().multiplyScalar(-30).add(_v2.set(0, 12, 0));
+            const desiredCamera = _v3.copy(b.position).add(off);
+            if (!this.followCameraReady) {
+                this.followCamera.copy(desiredCamera);
+                this.followLookTarget.copy(b.position);
+                this.followCameraReady = true;
+            } else {
+                this.followCamera.lerp(desiredCamera, blend);
+                this.followLookTarget.lerp(b.position, 1 - Math.exp(-dt * 10));
+            }
+            this.camera.position.copy(this.followCamera);
+            this.camera.lookAt(this.followLookTarget);
+        } else if (this.followedBoid) { this.followedBoid = null; this.followCameraReady = false; this.controls.enabled = true; this.controls.target.copy(this.followLookTarget); document.getElementById('fps-view').classList.remove('active'); document.getElementById('fps-view').textContent = "Follow Boid"; }
         if (this.fpsEl) this.fpsEl.textContent = Math.round(1 / (dt / this.params.performance.simSpeed || 0.01));
         if (this.boidCountEl) {
             let activeCount = 0;
             for (let i = 0; i < this.boids.length; i++) if (this.boids[i].active) activeCount++;
             this.boidCountEl.textContent = activeCount;
         }
-        this.controls.update();
+        if (this.controls.enabled) this.controls.update();
         if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
     }
 }

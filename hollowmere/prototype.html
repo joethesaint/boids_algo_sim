@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Hollowmere × Boids — World-first prototype</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+    body { margin: 0; overflow: hidden; background: #0b110e; }
+    iframe { border: 0; height: 100vh; inset: 0; position: fixed; width: 100vw; }
+    .panel { background: #0b100ce6; border: 1px solid #d5dbd238; box-shadow: 0 12px 32px #0007; color: #e7ede5; backdrop-filter: blur(14px); padding: 12px; position: fixed; transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); width: min(268px, calc(100vw - 32px)); z-index: 2; }
+    #controls { left: max(16px, env(safe-area-inset-left)); top: max(16px, env(safe-area-inset-top)); }
+    #status { bottom: max(16px, env(safe-area-inset-bottom)); color: #e7ede5a8; font-size: 10px; left: max(16px, env(safe-area-inset-left)); letter-spacing: .04em; width: auto; }
+    h1 { font-family: Georgia, serif; font-size: 20px; font-weight: 400; letter-spacing: .01em; margin: 0 0 4px; }
+    p { color: #e7ede599; font-family: system-ui, sans-serif; font-size: 12px; line-height: 1.4; margin: 0 0 12px; }
+    .eyebrow { color: #aeb9ab; font-size: 9px; letter-spacing: .15em; margin-bottom: 9px; text-transform: uppercase; }
+    .row { display: flex; gap: 0; margin-top: 7px; }
+    button { background: transparent; border: 1px solid #d5dbd238; color: #c7d0c4; cursor: pointer; flex: 1; font: inherit; font-size: 10px; letter-spacing: .04em; margin-left: -1px; min-height: 33px; padding: 7px 6px; text-transform: uppercase; transition: background .22s cubic-bezier(.32,.72,0,1), color .22s cubic-bezier(.32,.72,0,1), border-color .22s cubic-bezier(.32,.72,0,1); }
+    button:first-child { margin-left: 0; }
+    button:hover, button.active { background: #dfe8d9; border-color: #dfe8d9; color: #101510; position: relative; z-index: 1; }
+    button:focus-visible { outline: 1px solid #e9d3a4; outline-offset: 2px; }
+    .stat { border-top: 1px solid #d5dbd21f; color: #e7ede599; font-size: 10px; font-variant-numeric: tabular-nums; line-height: 1.4; margin-top: 12px; padding-top: 10px; }
+    .control { border-top: 1px solid #d5dbd21f; margin-top: 12px; padding-top: 10px; }
+    .control label { color: #e7ede599; display: flex; font-size: 10px; justify-content: space-between; letter-spacing: .06em; margin-bottom: 5px; text-transform: uppercase; }
+    .control output { color: #e7ede5; }
+    input[type="range"] { accent-color: #dfe8d9; display: block; margin: 0; width: 100%; }
+    #nav-guide { bottom: 50%; color: #edf1ea8c; font-size: 9px; letter-spacing: .15em; pointer-events: none; position: fixed; right: max(18px, env(safe-area-inset-right)); text-align: center; text-transform: uppercase; transform: translateY(50%); z-index: 2; }
+    #nav-guide::before, #nav-guide::after { background: linear-gradient(transparent, #dfe8d9a6 25%, #dfe8d9a6 75%, transparent); content: ""; display: block; height: 72px; margin: 8px auto; width: 1px; }
+    #nav-guide::after { animation: drift 3.4s ease-in-out infinite; height: 42px; margin-top: -48px; transform-origin: center; }
+    @keyframes drift { 50% { transform: translateY(22px); } }
+    body.ui-idle .panel, body.ui-idle #nav-guide { opacity: 0; transform: translateY(8px); }
+    body.ui-idle #nav-guide { transform: translateY(calc(50% + 8px)); }
+    @media (prefers-reduced-motion: reduce) { .panel, #nav-guide { transition-duration: 1ms; } #nav-guide::after { animation: none; } }
+    @media (max-width: 640px) { .panel { padding: 11px; } #controls { width: min(310px, calc(100vw - 32px)); } }
+  </style>
+</head>
+<body>
+  <iframe id="world" src="index.html" title="Hollowmere world"></iframe>
+  <section id="controls" class="panel" aria-label="World-first prototype controls">
+    <div class="eyebrow">World / 01</div>
+    <h1>Living World</h1>
+    <p>Explore the landscape. Shape the flock.</p>
+    <div class="row"><button data-action="pause">Pause world</button><button data-action="tour">Start tour</button></div>
+    <div class="row"><button data-style="0" class="active">Natural</button><button data-style="1">Paint</button><button data-style="4">Cinematic</button></div>
+    <div class="row"><button data-action="fly">Fly</button><button data-action="walk">Walk</button></div>
+    <div class="control"><label><span>Flock</span><output id="flock-state">Loading</output></label><div class="row"><button data-action="boids">Toggle birds</button></div></div>
+    <div class="control"><label for="separation"><span>Separation</span><output>2.2</output></label><input id="separation" data-boid="separation" type="range" min="0" max="5" step="0.1" value="2.2"></div>
+    <div class="control"><label for="alignment"><span>Alignment</span><output>1.0</output></label><input id="alignment" data-boid="alignment" type="range" min="0" max="3" step="0.1" value="1"></div>
+    <div class="control"><label for="cohesion"><span>Cohesion</span><output>0.9</output></label><input id="cohesion" data-boid="cohesion" type="range" min="0" max="3" step="0.1" value="0.9"></div>
+    <div class="control"><label for="speed"><span>Flight speed</span><output>1.0</output></label><input id="speed" data-boid="speed" type="range" min="0.4" max="2" step="0.1" value="1"></div>
+    <div class="stat" id="stats">Loading world…</div>
+  </section>
+  <div id="status" class="panel">World-first spike: terrain, ambient flocks, fly/walk, tour, and cinematic rendering.</div>
+  <div id="nav-guide" aria-hidden="true"><span>↑ Fly / walk</span><br><span>W · S</span><br><span>A — D</span></div>
+  <script>
+    const frame = document.getElementById('world');
+    let paused = false;
+    function cleanWorldUI() {
+      const doc = frame.contentDocument;
+      if (!doc || doc.getElementById('boids-shell-cleanup')) return;
+      const style = doc.createElement('style');
+      style.id = 'boids-shell-cleanup';
+      style.textContent = '#hint,#styles,#toast,#mode,#fps,#scenes{display:none!important}button,a{ -webkit-tap-highlight-color:transparent!important; }';
+      doc.head.appendChild(style);
+      ['pointermove', 'pointerdown', 'keydown', 'focusin'].forEach(type => frame.contentWindow.addEventListener(type, wakeUI, { passive: true }));
+    }
+    function world() { return frame.contentWindow && frame.contentWindow.__world; }
+    function boids() { return frame.contentWindow && frame.contentWindow.__hollowBoids; }
+    function controls() { const w = world(); return w && w.controls; }
+    function setCameraMode(mode) {
+      const c = controls();
+      if (!c) return;
+      if (c.tour) c.stopTour();
+      c.mode = mode;
+      c.onMode && c.onMode(mode);
+    }
+    document.querySelectorAll('[data-style]').forEach(button => button.addEventListener('click', () => {
+      const w = world(); if (!w) return;
+      w.setStyle(Number(button.dataset.style));
+      document.querySelectorAll('[data-style]').forEach(b => b.classList.toggle('active', b === button));
+    }));
+    document.querySelector('[data-action="pause"]').addEventListener('click', event => {
+      const child = frame.contentWindow; if (!child || !child.__setPaused) return;
+      paused = !paused; child.__setPaused(paused); event.currentTarget.textContent = paused ? 'Resume world' : 'Pause world';
+    });
+    let birdsEnabled = true;
+    document.querySelector('[data-action="boids"]').addEventListener('click', () => {
+      const flock = boids(); if (!flock) return;
+      birdsEnabled = !birdsEnabled; flock.setEnabled(birdsEnabled);
+      document.getElementById('flock-state').textContent = birdsEnabled ? 'Active' : 'Hidden';
+    });
+    document.querySelectorAll('[data-boid]').forEach(input => input.addEventListener('input', () => {
+      const flock = boids(); if (!flock) return;
+      const value = Number(input.value);
+      flock.setParameters({ [input.dataset.boid]: value });
+      input.previousElementSibling.querySelector('output').textContent = value.toFixed(1);
+    }));
+    document.querySelector('[data-action="tour"]').addEventListener('click', event => {
+      const child = frame.contentWindow; const c = controls(); if (!child || !c) return;
+      child.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT', bubbles: true }));
+      event.currentTarget.textContent = c.tour ? 'Stop tour' : 'Start tour';
+    });
+    document.querySelector('[data-action="fly"]').addEventListener('click', () => setCameraMode('fly'));
+    document.querySelector('[data-action="walk"]').addEventListener('click', () => setCameraMode('walk'));
+    let idleTimer;
+    function wakeUI() { document.body.classList.remove('ui-idle'); clearTimeout(idleTimer); idleTimer = setTimeout(() => document.body.classList.add('ui-idle'), 5500); }
+    ['pointermove', 'pointerdown', 'keydown', 'focusin'].forEach(type => document.addEventListener(type, wakeUI, { passive: true }));
+    frame.addEventListener('load', wakeUI);
+    wakeUI();
+    setInterval(() => {
+      cleanWorldUI();
+      const w = world(); const out = document.getElementById('stats');
+      if (!w || !w.ready) return;
+      const info = w.info(), stats = w.stats();
+      const flock = boids();
+      if (flock) document.getElementById('flock-state').textContent = birdsEnabled ? 'Active' : 'Hidden';
+      out.textContent = `${flock ? flock.stats.birds : '…'} birds · ${w.camera().mode} · ${w.styleName()}`;
+    }, 500);
+  </script>
+  <link rel="stylesheet" href="navigation.css">
+  <script src="navigation.js"></script>
+</body>
+</html>
