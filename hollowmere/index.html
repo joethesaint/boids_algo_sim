@@ -3096,32 +3096,6 @@ function hollowBoids(groundFn,scene){
     void main(){vec4 wp=modelMatrix*vec4(position,1.0);vWorld=wp.xyz;
     vNormal=normalize(mat3(modelMatrix)*normal);vTint=2.0;gl_Position=projectionMatrix*viewMatrix*wp;}`;
   const supportMat=h({name:'perch-supports',vertex:staticVertex,fragment:HB_FRAG,side:e.DoubleSide}).mat;
-  const flamingoFrag=`in vec3 vWorld;in vec3 vNormal;in float vTint;
-    void main(){vec3 N=normalize(vNormal);if(!gl_FrontFacing)N=-N;vec3 V=normalize(uCamPos-vWorld);
-    vec3 alb=mix(vec3(.72,.12,.25),vec3(1.0,.42,.55),clamp(N.y*.5+.55,0.,1.));
-    float sh=sunShadow(vWorld,N,dot(N,uSunDir))*cloudShadowAt(vWorld);Surf s;
-    s.albedo=styleAlbedo(alb,alb);s.N=N;s.rough=.74;s.spec=.12;s.ao=1.;s.trans=.18;s.rim=.45;
-    writeGBuffer(finalFog(shadeSurface(s,vWorld,V,sh),vWorld),N,.70);
-  }`;
-  const flamingoMat=h({name:'flamingos',vertex:staticVertex,fragment:flamingoFrag,side:e.DoubleSide}).mat;
-  const flamingos=new e.Group();flamingos.name='flamingo-rookery';scene.add(flamingos);
-  const makeFlamingo=(x,z,scale,turn)=>{
-    const root=new e.Group(), floor=groundFn(x,z);root.position.set(x,floor,z);root.rotation.y=turn;root.scale.setScalar(scale);
-    const add=(geometry,position=[0,0,0],rotation=[0,0,0],s=[1,1,1])=>{const mesh=new e.Mesh(geometry,flamingoMat);mesh.position.set(...position);mesh.rotation.set(...rotation);mesh.scale.set(...s);root.add(mesh);return mesh;};
-    // A low-poly flamingo: oval body, a curved neck, tucked beak and one planted leg.
-    add(new e.SphereGeometry(.52,10,7),[0,2.15,0],[0,0,0],[1,.78,1.18]);
-    add(new e.SphereGeometry(.48,9,6),[-.08,2.2,-.08],[0,0,0],[1.05,.72,1.22]);
-    const neck=new e.CatmullRomCurve3([new e.Vector3(.06,2.35,.12),new e.Vector3(.17,3.15,.18),new e.Vector3(.12,3.8,.35),new e.Vector3(-.06,4.04,.46)]);
-    add(new e.TubeGeometry(neck,12,.105,6,false));
-    const head=add(new e.SphereGeometry(.19,8,6),[-.06,4.05,.47]);
-    const beak=add(new e.ConeGeometry(.11,.38,5),[-.06,4.0,.72],[Math.PI/2,0,0]);beak.material=flamingoMat;
-    const leg=(lx,lz,height,bent)=>{add(new e.CylinderGeometry(.035,.045,height,5),[lx,height*.5,lz],[bent,0,0]);add(new e.CylinderGeometry(.04,.04,.42,5),[lx,height*.04,lz+.17],[Math.PI/2,0,0]);};
-    leg(-.16,-.05,1.72,.07);leg(.17,.06,1.03,-.55);
-    flamingos.add(root);return {root,head,phase:turn*2.7};
-  };
-  const flamingoBirds=[makeFlamingo(-30,94,1.05,.28),makeFlamingo(-24,99,.86,2.2),makeFlamingo(-37,101,.94,-.7),makeFlamingo(-18,91,.78,1.25),makeFlamingo(-43,90,.9,-2.1)];
-  // The rookery keeps two resting birds; the other three share the same world frame loop as Wings.
-  flamingoBirds.forEach((bird,index)=>{bird.flying=index>=2;bird.home=bird.root.position.clone();bird.radius=18+index*4;bird.altitude=25+index*7;});
   const perches=new e.Group();scene.add(perches);
   for(const path of layout.paths) {
     const curve=new e.CatmullRomCurve3(path.map(p=>new e.Vector3(...p)));
@@ -3166,13 +3140,8 @@ function hollowBoids(groundFn,scene){
   const CS=P.perc, grid=new Map();
   const key=(x,y,z)=>((x+512)*1024+(y+512))*1024+(z+512);
   let enabled=!0, hawkCool=0, hawkTarget=-1, scatter=0, followIndex=-1, followReady=!1, followEye=[0,0,0], followTarget=[0,0,0];
-  const stats={birds:N,flamingos:flamingoBirds.length,hawkChases:0,perched:0,landing:0,flying:N};
+  const stats={birds:N,hawkChases:0,perched:0,landing:0,flying:N};
   function step(dt,t,cam){
-    for(const bird of flamingoBirds){bird.head.rotation.y=Math.sin(t*.7+bird.phase)*.24;
-      if(bird.flying){const a=t*.24+bird.phase,r=bird.radius,x=bird.home.x+Math.cos(a)*r,z=bird.home.z+Math.sin(a)*r,y=groundFn(x,z)+bird.altitude+Math.sin(t*.9+bird.phase)*2.2;
-        bird.root.position.set(x,y,z);bird.root.rotation.y=-a+Math.PI*.5;bird.root.rotation.z=Math.sin(t*1.8+bird.phase)*.16;bird.root.rotation.x=Math.sin(t*3.4+bird.phase)*.08;
-      }else bird.root.rotation.z=Math.sin(t*.5+bird.phase)*.025;
-    }
     grid.clear();
     for(let i=0;i<N;i++){if(state[i])continue;const kk=key(Math.floor(pos[i*3]/CS),Math.floor(pos[i*3+1]/CS),Math.floor(pos[i*3+2]/CS));let c=grid.get(kk);if(!c){c=[];grid.set(kk,c);}c.push(i);}
     const tg=FLOCKS.map((f,i)=>tgtAt(f,i,t));
