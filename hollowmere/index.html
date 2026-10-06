@@ -3120,6 +3120,8 @@ function hollowBoids(groundFn,scene){
     flamingos.add(root);return {root,head,phase:turn*2.7};
   };
   const flamingoBirds=[makeFlamingo(-30,94,1.05,.28),makeFlamingo(-24,99,.86,2.2),makeFlamingo(-37,101,.94,-.7),makeFlamingo(-18,91,.78,1.25),makeFlamingo(-43,90,.9,-2.1)];
+  // The rookery keeps two resting birds; the other three share the same world frame loop as Wings.
+  flamingoBirds.forEach((bird,index)=>{bird.flying=index>=2;bird.home=bird.root.position.clone();bird.radius=18+index*4;bird.altitude=25+index*7;});
   const perches=new e.Group();scene.add(perches);
   for(const path of layout.paths) {
     const curve=new e.CatmullRomCurve3(path.map(p=>new e.Vector3(...p)));
@@ -3166,7 +3168,11 @@ function hollowBoids(groundFn,scene){
   let enabled=!0, hawkCool=0, hawkTarget=-1, scatter=0, followIndex=-1, followReady=!1, followEye=[0,0,0], followTarget=[0,0,0];
   const stats={birds:N,flamingos:flamingoBirds.length,hawkChases:0,perched:0,landing:0,flying:N};
   function step(dt,t,cam){
-    for(const bird of flamingoBirds){bird.head.rotation.y=Math.sin(t*.7+bird.phase)*.24;bird.root.rotation.z=Math.sin(t*.5+bird.phase)*.025;}
+    for(const bird of flamingoBirds){bird.head.rotation.y=Math.sin(t*.7+bird.phase)*.24;
+      if(bird.flying){const a=t*.24+bird.phase,r=bird.radius,x=bird.home.x+Math.cos(a)*r,z=bird.home.z+Math.sin(a)*r,y=groundFn(x,z)+bird.altitude+Math.sin(t*.9+bird.phase)*2.2;
+        bird.root.position.set(x,y,z);bird.root.rotation.y=-a+Math.PI*.5;bird.root.rotation.z=Math.sin(t*1.8+bird.phase)*.16;bird.root.rotation.x=Math.sin(t*3.4+bird.phase)*.08;
+      }else bird.root.rotation.z=Math.sin(t*.5+bird.phase)*.025;
+    }
     grid.clear();
     for(let i=0;i<N;i++){if(state[i])continue;const kk=key(Math.floor(pos[i*3]/CS),Math.floor(pos[i*3+1]/CS),Math.floor(pos[i*3+2]/CS));let c=grid.get(kk);if(!c){c=[];grid.set(kk,c);}c.push(i);}
     const tg=FLOCKS.map((f,i)=>tgtAt(f,i,t));
